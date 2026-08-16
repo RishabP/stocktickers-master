@@ -1,0 +1,2497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StocXplorer</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="analysis-page{% if asset_type == 'bond' %} asset-bond{% endif %}">
+    <div class="scroll-progress" id="scrollProgress"></div>
+    <div class="parallax-layer parallax-glow-1" data-parallax="0.05"></div>
+    <div class="parallax-layer parallax-glow-2" data-parallax="0.11"></div>
+    <div class="site-shell">
+        <header class="topbar">
+            <div class="brand">
+                <img src="{{ url_for('static', filename='StocxplorerLogo.jpg') }}" alt="StocXplorer logo">
+                <span>StocXplorer</span>
+            </div>
+            <div class="menu-dropdown report-menu" id="menuDropdown">
+                <select id="themeModeSelect" class="field-input" style="width:auto; min-width: 170px;">
+                    <option value="dark" selected>StockXplorer Dark</option>
+                    <option value="light">StockXplorer Curated Light</option>
+                </select>
+                <button class="link-chip menu-trigger" id="menuTrigger" type="button" aria-expanded="false" aria-controls="menuPanel" aria-label="Open navigation menu">Menu</button>
+                <div class="menu-panel" id="menuPanel" role="menu" aria-label="Navigation Menu">
+                    <a href="{{ url_for('welcome_page') }}" role="menuitem">Home</a>
+                    <a href="{{ url_for('welcome_page') }}#scanner" role="menuitem">Stock Search</a>
+                    <a href="{{ url_for('welcome_page') }}#crisis-library" role="menuitem">Crisis Library</a>
+                </div>
+            </div>
+        </header>
+
+        <main class="page-grid stock-grid">
+            <section class="panel stock-meta">
+                <p class="eyebrow">Analyst Report</p>
+                <h1>{{ ticker }} <span class="title-divider">|</span> {{ active_strategy_name }}</h1>
+                <div class="button-row">
+                    <button class="primary-button" type="submit" form="controlPanelForm" id="generateMetricsBtn">Generate Key Metrics</button>
+                </div>
+                <div class="summary-ribbon">
+                    <div>
+                        <p class="summary-k">Global Crisis Period</p>
+                        <p class="summary-v">{{ timeline_label }}</p>
+                    </div>
+                    <div>
+                        <p class="summary-k">Asset</p>
+                        <p class="summary-v">{{ asset_type|upper }}</p>
+                    </div>
+                    <div>
+                        <p class="summary-k">Last Price</p>
+                        <p class="summary-v">{{ timeline_summary.end }}</p>
+                    </div>
+                    <div>
+                        <p class="summary-k">Window Change</p>
+                        <p class="summary-v">{{ timeline_summary.change_pct }}</p>
+                    </div>
+                    <div>
+                        <p class="summary-k">Volatility</p>
+                        <p class="summary-v">{{ timeline_summary.volatility }}</p>
+                    </div>
+                </div>
+                {% if is_crisis_mode %}
+                <p class="chart-note">Mode: Crisis analysis with risk-focused diagnostics and stress mapping.</p>
+                {% endif %}
+                {% if 'fallback' in timeline_label|lower or 'no historical data' in timeline_label|lower %}
+                <p class="typing-disclaimer">Data note: selected ticker has limited history in this window, so proxy data was used to keep crisis diagnostics available.</p>
+                {% endif %}
+            </section>
+
+            <section class="panel timeline-control-panel">
+                <h2>Control Panel</h2>
+                <form class="scanner-form" id="controlPanelForm" action="{{ url_for('stock_page') }}" method="post">
+                    <input type="hidden" id="active_strategy" name="active_strategy" value="{{ active_strategy }}">
+                    <input type="hidden" id="period" name="period" value="{{ period }}">
+                    <div class="input-group">
+                        <label for="asset_type">Asset Type</label>
+                        <select id="asset_type" class="field-input" name="asset_type">
+                            <option value="stock" {% if asset_type == 'stock' %}selected{% endif %}>Stock</option>
+                            <option value="forex" {% if asset_type == 'forex' %}selected{% endif %}>Forex</option>
+                            <option value="bond" {% if asset_type == 'bond' %}selected{% endif %}>Bond</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label for="ticker">Ticker Symbol</label>
+                        <input id="ticker" class="field-input" type="text" name="ticker" value="{{ ticker }}" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="timeline_preset">Global Crisis Period</label>
+                        <select id="timeline_preset" class="field-input" name="timeline_preset">
+                            {% for preset_key, preset_label in timeline_presets.items() %}
+                                <option value="{{ preset_key }}" {% if preset_key == timeline_preset %}selected{% endif %}>{{ preset_label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="custom-date-grid" id="customDateGrid">
+                        <div class="input-group">
+                            <label for="start_date">Start Date</label>
+                            <input id="start_date" class="field-input" type="date" name="start_date" value="{{ start_date }}">
+                        </div>
+                        <div class="input-group">
+                            <label for="end_date">End Date</label>
+                            <input id="end_date" class="field-input" type="date" name="end_date" value="{{ end_date }}">
+                        </div>
+                    </div>
+                    <div class="button-row">
+                        <button class="primary-button" type="submit">Refresh Report</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="panel timeline-summary-panel">
+                <h2>Price Action Snapshot</h2>
+                <div class="timeline-metric-grid">
+                    <article class="timeline-metric-card">
+                        <h3>Start Price</h3>
+                        <p>{{ timeline_summary.start }}</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>End Price</h3>
+                        <p>{{ timeline_summary.end }}</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Change</h3>
+                        <p>{{ timeline_summary.change_pct }}</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Range</h3>
+                        <p>{{ timeline_summary.low }} to {{ timeline_summary.high }}</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Avg Volume</h3>
+                        <p>{{ timeline_summary.avg_volume }}</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Annualized Volatility</h3>
+                        <p>{{ timeline_summary.volatility }}</p>
+                    </article>
+                </div>
+            </section>
+
+            {% if asset_type == 'bond' and bond_metrics %}
+            <section class="panel bond-metrics-panel">
+                <h2>Bond Analytics and Risk Metrics</h2>
+                <div class="timeline-metric-grid">
+                    <article class="timeline-metric-card">
+                        <h3>Instrument Type</h3>
+                        <p>{{ bond_metrics.instrument_type }}</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Total Return</h3>
+                        <p>{{ bond_metrics.overview.return_pct }}%</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Annualized Volatility</h3>
+                        <p>{{ bond_metrics.overview.volatility_pct }}%</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Downside Deviation</h3>
+                        <p>{{ bond_metrics.overview.downside_dev_pct }}%</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Max Drawdown</h3>
+                        <p>{{ bond_metrics.overview.max_drawdown_pct }}%</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Underwater Days</h3>
+                        <p>{{ bond_metrics.overview.underwater_days }}</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Duration Proxy</h3>
+                        <p>{{ bond_metrics.rates.duration_proxy }}</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>DV01 Proxy</h3>
+                        <p>{{ bond_metrics.rates.dv01_proxy }}</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Curve (2s10s)</h3>
+                        <p>{{ bond_metrics.curve.curve_2s10s }}</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Curve Regime</h3>
+                        <p>{{ bond_metrics.curve.regime }}</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>HY Spread</h3>
+                        <p>{{ bond_metrics.credit.hy_spread }}</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>IG Spread</h3>
+                        <p>{{ bond_metrics.credit.ig_spread }}</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Breakeven 10Y</h3>
+                        <p>{{ bond_metrics.inflation.breakeven_10y }}</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Carry Proxy</h3>
+                        <p>{{ bond_metrics.carry_roll.carry_proxy }}</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Roll Proxy</h3>
+                        <p>{{ bond_metrics.carry_roll.roll_proxy }}</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Liquidity Stress %</h3>
+                        <p>{{ bond_metrics.liquidity.stress_day_freq }}</p>
+                    </article>
+                </div>
+            </section>
+            {% endif %}
+
+            {% if asset_type == 'forex' and forex_metrics and forex_metrics.rows %}
+            <section class="panel forex-metrics-panel">
+                <h2>Forex Stress Metrics</h2>
+                <p class="chart-note">Window: {{ forex_metrics.start }} to {{ forex_metrics.end }}</p>
+                <div class="table-wrap">
+                    <table class="watchlist-table">
+                        <thead>
+                            <tr>
+                                <th>Metric</th>
+                                <th>Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in forex_metrics.rows %}
+                            <tr>
+                                <td>{{ row.metric }}</td>
+                                <td>{{ row.value }}{{ row.unit }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+            {% endif %}
+
+            <section class="panel chart-panel">
+                <h2>Primary Chart Workspace</h2>
+                <p class="chart-note">Core charting surface for thesis validation, technical context, and scenario planning.</p>
+
+                <div class="panel" id="backtestPanel">
+                    <h3>Strategy Backtest Simulator</h3>
+                    <p class="chart-note">Execution model: signal on close, fill at next open. Works on regular and crisis periods.</p>
+
+                    <h3>Strategy Section</h3>
+                    <div class="timeline-metric-grid">
+                        <div class="input-group">
+                            <label for="btStrategyFamily">Strategy Family</label>
+                            <select id="btStrategyFamily" class="field-input">
+                                <option value="all" selected>All Families</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label for="btStrategyCatalog">Strategy Template</label>
+                            <select id="btStrategyCatalog" class="field-input"></select>
+                        </div>
+                    </div>
+
+                    <div id="strategyParamsBlock" class="panel" style="margin-top:0.55rem;"></div>
+
+                    <h3>Indicator Section</h3>
+                    <p class="chart-note">Use this to test any listed indicator below with custom entry and exit logic.</p>
+                    <div class="timeline-metric-grid">
+                        <div class="input-group">
+                            <label for="btStrategy">Strategy</label>
+                            <select id="btStrategy" class="field-input">
+                                <option value="rsi_reversal">RSI Reversal</option>
+                                <option value="ema_cross">EMA Cross 20/50</option>
+                                <option value="custom_builder">Custom Indicator Builder</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label for="btRsiLength">RSI Length</label>
+                            <input id="btRsiLength" class="field-input" type="number" value="14" min="2" max="60">
+                        </div>
+                        <div class="input-group">
+                            <label for="btRsiBuy">RSI Buy <=</label>
+                            <input id="btRsiBuy" class="field-input" type="number" value="30" min="5" max="50">
+                        </div>
+                        <div class="input-group">
+                            <label for="btRsiSell">RSI Sell >=</label>
+                            <input id="btRsiSell" class="field-input" type="number" value="70" min="50" max="95">
+                        </div>
+                        <div class="input-group">
+                            <label for="btStopLoss">Stop Loss %</label>
+                            <input id="btStopLoss" class="field-input" type="number" value="0" min="0" step="0.1">
+                        </div>
+                        <div class="input-group">
+                            <label for="btTakeProfit">Take Profit %</label>
+                            <input id="btTakeProfit" class="field-input" type="number" value="0" min="0" step="0.1">
+                        </div>
+                        <div class="input-group">
+                            <label for="btAllowShort">Allow Short</label>
+                            <select id="btAllowShort" class="field-input">
+                                <option value="false" selected>No</option>
+                                <option value="true">Yes</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label for="btUseChartTools">Use Drawn Chart Tools</label>
+                            <select id="btUseChartTools" class="field-input">
+                                <option value="false" selected>No</option>
+                                <option value="true">Yes</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="customRuleBuilder" class="panel" style="margin-top:0.6rem;">
+                        <h3>Custom Rule Builder</h3>
+                        <p class="chart-note">Define entry and exit logic using any listed indicator. All active rules are combined with AND.</p>
+
+                        <h3>Entry Rules</h3>
+                        <div class="timeline-metric-grid">
+                            {% for idx in [1,2,3] %}
+                            <div class="input-group">
+                                <label for="entryLhs{{ idx }}">Entry {{ idx }} Left Indicator</label>
+                                <select id="entryLhs{{ idx }}" class="field-input bt-indicator-select"></select>
+                            </div>
+                            <div class="input-group">
+                                <label for="entryOp{{ idx }}">Entry {{ idx }} Operator</label>
+                                <select id="entryOp{{ idx }}" class="field-input">
+                                    <option value=">">&gt;</option>
+                                    <option value=">=">&gt;=</option>
+                                    <option value="<">&lt;</option>
+                                    <option value="<=">&lt;=</option>
+                                    <option value="crosses_above">crosses above</option>
+                                    <option value="crosses_below">crosses below</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label for="entryRhsType{{ idx }}">Entry {{ idx }} Right Type</label>
+                                <select id="entryRhsType{{ idx }}" class="field-input">
+                                    <option value="value" selected>Numeric Value</option>
+                                    <option value="indicator">Indicator</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label for="entryRhsValue{{ idx }}">Entry {{ idx }} Right Value</label>
+                                <input id="entryRhsValue{{ idx }}" class="field-input" type="number" step="0.01" value="0">
+                            </div>
+                            <div class="input-group">
+                                <label for="entryRhsIndicator{{ idx }}">Entry {{ idx }} Right Indicator</label>
+                                <select id="entryRhsIndicator{{ idx }}" class="field-input bt-indicator-select"></select>
+                            </div>
+                            {% endfor %}
+                        </div>
+
+                        <h3>Exit Rules</h3>
+                        <div class="timeline-metric-grid">
+                            {% for idx in [1,2,3] %}
+                            <div class="input-group">
+                                <label for="exitLhs{{ idx }}">Exit {{ idx }} Left Indicator</label>
+                                <select id="exitLhs{{ idx }}" class="field-input bt-indicator-select"></select>
+                            </div>
+                            <div class="input-group">
+                                <label for="exitOp{{ idx }}">Exit {{ idx }} Operator</label>
+                                <select id="exitOp{{ idx }}" class="field-input">
+                                    <option value=">">&gt;</option>
+                                    <option value=">=">&gt;=</option>
+                                    <option value="<">&lt;</option>
+                                    <option value="<=">&lt;=</option>
+                                    <option value="crosses_above">crosses above</option>
+                                    <option value="crosses_below">crosses below</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label for="exitRhsType{{ idx }}">Exit {{ idx }} Right Type</label>
+                                <select id="exitRhsType{{ idx }}" class="field-input">
+                                    <option value="value" selected>Numeric Value</option>
+                                    <option value="indicator">Indicator</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label for="exitRhsValue{{ idx }}">Exit {{ idx }} Right Value</label>
+                                <input id="exitRhsValue{{ idx }}" class="field-input" type="number" step="0.01" value="0">
+                            </div>
+                            <div class="input-group">
+                                <label for="exitRhsIndicator{{ idx }}">Exit {{ idx }} Right Indicator</label>
+                                <select id="exitRhsIndicator{{ idx }}" class="field-input bt-indicator-select"></select>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="button-row" style="margin-top:0.5rem;">
+                        <button class="primary-button" type="button" id="runBacktestBtn">Run Backtest</button>
+                        <button class="ghost-button" type="button" id="playBacktestBtn">Play Replay</button>
+                        <button class="ghost-button" type="button" id="pauseBacktestBtn">Pause</button>
+                        <button class="ghost-button" type="button" id="resetBacktestBtn">Reset</button>
+                    </div>
+                    <div class="timeline-metric-grid" id="backtestStats" style="margin-top:0.6rem;"></div>
+                    <div id="backtestChart" class="live-chart-frame custom-quant-frame" style="margin-top:0.7rem;"></div>
+                </div>
+
+                <div class="chart-toolbar">
+                    <select id="chartTypeMode" class="field-input" style="width:auto; min-width: 170px;">
+                        <option value="candlestick" selected>Candlestick View</option>
+                        <option value="line">Line View</option>
+                    </select>
+                    <button class="ghost-button" type="button" id="customFullscreenBtn">Custom Chart Fullscreen</button>
+                    <button class="primary-button" type="button" id="reloadCustomChart">Reload Custom Chart</button>
+                    <button class="ghost-button" type="button" id="undoDrawing">Undo</button>
+                    <button class="ghost-button" type="button" id="clearDrawings">Clear Drawings</button>
+                </div>
+                {% if not is_crisis_mode %}
+                <div class="chart-toolbar alert-toolbar">
+                    <select id="alertCondition" class="field-input">
+                        <option value="above">Alert Above</option>
+                        <option value="below">Alert Below</option>
+                    </select>
+                    <input id="alertPrice" class="field-input" type="number" step="0.0001" placeholder="Price level">
+                    <button class="primary-button" type="button" id="addPriceAlert">Add Price Alert</button>
+                </div>
+                <p class="chart-note" id="priceAlertStatus">Latest price: --</p>
+                <div id="priceAlertList" class="price-alert-list"></div>
+                {% endif %}
+                <p class="chart-note">Tip: use <strong>Pointer</strong> and drag shape handles (dots) to resize/reposition tools.</p>
+
+                <div class="custom-workspace" id="customChartWrap">
+                    <aside class="toolbox-panel">
+                        <h3>Chart Tools</h3>
+                        <input id="toolLookup" class="field-input" type="text" placeholder="Lookup tools/indicators...">
+                        <div class="toolbox-grid" id="toolboxButtons">
+                            <button type="button" class="tool-button" data-tool="trendline">Trendline</button>
+                            <button type="button" class="tool-button" data-tool="ray">Ray</button>
+                            <button type="button" class="tool-button" data-tool="extendedline">Extended Line</button>
+                            <button type="button" class="tool-button" data-tool="infoline">Info Line</button>
+                            <button type="button" class="tool-button" data-tool="trendangle">Trend Angle</button>
+                            <button type="button" class="tool-button" data-tool="horizontal">Horizontal Line</button>
+                            <button type="button" class="tool-button" data-tool="horizontalray">Horizontal Ray</button>
+                            <button type="button" class="tool-button" data-tool="vertical">Vertical Line</button>
+                            <button type="button" class="tool-button" data-tool="crossline">Cross Line</button>
+                            <button type="button" class="tool-button" data-tool="zone">S/R Zone</button>
+                            <button type="button" class="tool-button" data-tool="channel">Parallel Channel</button>
+                            <button type="button" class="tool-button" data-tool="regressionchannel">Regression Channel</button>
+                            <button type="button" class="tool-button" data-tool="fib">Fibonacci</button>
+                            <button type="button" class="tool-button" data-tool="fibext">Fib Extension</button>
+                            <button type="button" class="tool-button" data-tool="fibchannel">Fib Channel</button>
+                            <button type="button" class="tool-button" data-tool="gann">Gann Box</button>
+                            <button type="button" class="tool-button" data-tool="gannfan">Gann Fan</button>
+                            <button type="button" class="tool-button" data-tool="pitchfork">Pitchfork</button>
+                            <button type="button" class="tool-button" data-tool="arrow">Arrow</button>
+                            <button type="button" class="tool-button" data-tool="callout">Callout</button>
+                            <button type="button" class="tool-button" data-tool="note">Note</button>
+                            <button type="button" class="tool-button" data-tool="rect">Rectangle</button>
+                            <button type="button" class="tool-button" data-tool="rotatedrect">Rotated Rectangle</button>
+                            <button type="button" class="tool-button" data-tool="ellipse">Ellipse</button>
+                            <button type="button" class="tool-button" data-tool="triangle">Triangle</button>
+                            <button type="button" class="tool-button" data-tool="riskbox">Risk Box</button>
+                            <button type="button" class="tool-button" data-tool="annotation">Text</button>
+                            <button type="button" class="tool-button" data-tool="measure">Measure</button>
+                            <button type="button" class="tool-button" data-tool="long">Long Position</button>
+                            <button type="button" class="tool-button" data-tool="short">Short Position</button>
+                            <button type="button" class="tool-button" data-tool="stoploss">Stop Loss</button>
+                            <button type="button" class="tool-button" data-tool="takeprofit">Take Profit</button>
+                            <button type="button" class="tool-button" data-tool="anchoredvwap">Anchored VWAP</button>
+                            <button type="button" class="tool-button" data-tool="none">Pointer</button>
+                        </div>
+                        <p id="activeToolLabel" class="active-tool-label">Active tool: Pointer</p>
+
+                        <h3>Tool Style</h3>
+                        <div class="tool-style-panel">
+                            <label for="toolColor">Color</label>
+                            <input id="toolColor" type="color" value="#6fc5ff">
+                            <label for="toolWidth">Width</label>
+                            <input id="toolWidth" type="range" min="1" max="5" step="1" value="2">
+                            <label for="toolDash">Line Style</label>
+                            <select id="toolDash" class="field-input">
+                                <option value="solid">Solid</option>
+                                <option value="dot">Dotted</option>
+                                <option value="dash">Dashed</option>
+                            </select>
+                            <label class="toggle-line"><input id="magnetToggle" type="checkbox" checked> Magnet snap to close</label>
+                        </div>
+
+                        <h3>Indicators</h3>
+                        <div class="indicator-picker" id="indicatorPicker">
+                            <label><input type="checkbox" value="sma10"> SMA 10</label>
+                            <label><input type="checkbox" value="sma20" checked> SMA 20</label>
+                            <label><input type="checkbox" value="sma50" checked> SMA 50</label>
+                            <label><input type="checkbox" value="sma100"> SMA 100</label>
+                            <label><input type="checkbox" value="sma200"> SMA 200</label>
+                            <label><input type="checkbox" value="ema9"> EMA 9</label>
+                            <label><input type="checkbox" value="ema20" checked> EMA 20</label>
+                            <label><input type="checkbox" value="ema21"> EMA 21</label>
+                            <label><input type="checkbox" value="ema50"> EMA 50</label>
+                            <label><input type="checkbox" value="ema100"> EMA 100</label>
+                            <label><input type="checkbox" value="wma20"> WMA 20</label>
+                            <label><input type="checkbox" value="hma20"> HMA 20</label>
+                            <label><input type="checkbox" value="vwma20"> VWMA 20</label>
+                            <label><input type="checkbox" value="rsi14" checked> RSI 14</label>
+                            <label><input type="checkbox" value="rsi2"> RSI 2</label>
+                            <label><input type="checkbox" value="rsi21"> RSI 21</label>
+                            <label><input type="checkbox" value="macd" checked> MACD</label>
+                            <label><input type="checkbox" value="ppo"> PPO</label>
+                            <label><input type="checkbox" value="trix15"> TRIX 15</label>
+                            <label><input type="checkbox" value="bbands" checked> Bollinger</label>
+                            <label><input type="checkbox" value="bbands_width"> BB Width</label>
+                            <label><input type="checkbox" value="keltner"> Keltner Channel</label>
+                            <label><input type="checkbox" value="donchian"> Donchian Channel</label>
+                            <label><input type="checkbox" value="atr14" checked> ATR</label>
+                            <label><input type="checkbox" value="stoch"> Stochastic</label>
+                            <label><input type="checkbox" value="stochrsi"> Stoch RSI</label>
+                            <label><input type="checkbox" value="obv"> OBV</label>
+                            <label><input type="checkbox" value="vwap" checked> VWAP</label>
+                            <label><input type="checkbox" value="adx"> ADX</label>
+                            <label><input type="checkbox" value="plus_di"> +DI</label>
+                            <label><input type="checkbox" value="minus_di"> -DI</label>
+                            <label><input type="checkbox" value="ichimoku"> Ichimoku</label>
+                            <label><input type="checkbox" value="roc12"> ROC</label>
+                            <label><input type="checkbox" value="mom10"> Momentum 10</label>
+                            <label><input type="checkbox" value="williamsr14"> Williams %R</label>
+                            <label><input type="checkbox" value="cci20"> CCI</label>
+                            <label><input type="checkbox" value="mfi14"> MFI</label>
+                            <label><input type="checkbox" value="cmf20"> CMF</label>
+                            <label><input type="checkbox" value="aroon"> Aroon</label>
+                            <label><input type="checkbox" value="ultimateosc"> Ultimate Osc</label>
+                            <label><input type="checkbox" value="forceindex13"> Force Index</label>
+                            <label><input type="checkbox" value="dpo20"> DPO</label>
+                            <label><input type="checkbox" value="hv20"> Hist Vol 20</label>
+                            <label><input type="checkbox" value="adl"> ADL</label>
+                            <label><input type="checkbox" value="chaikinosc"> Chaikin Osc</label>
+                            <label><input type="checkbox" value="supertrend"> Supertrend</label>
+                            <label><input type="checkbox" value="psar"> Parabolic SAR</label>
+                        </div>
+
+                        {% if not is_crisis_mode %}
+                        <h3>Strategy Lookup</h3>
+                        <input id="strategyLookup" class="field-input" type="text" placeholder="Find strategy by market regime...">
+                        <div id="strategyList" class="strategy-list"></div>
+                        {% endif %}
+
+                        <h3>Macro Overlays</h3>
+                        <div class="overlay-picker" id="overlayPicker">
+                            <label><input type="checkbox" value="vix" checked> VIX</label>
+                            <label><input type="checkbox" value="credit_spread_hy" checked> HY Spread</label>
+                            <label><input type="checkbox" value="credit_spread_ig" checked> IG Spread</label>
+                            <label><input type="checkbox" value="yield_2y" checked> US 2Y Yield</label>
+                            <label><input type="checkbox" value="yield_10y" checked> US 10Y Yield</label>
+                            <label><input type="checkbox" value="yield_curve_spread" checked> 10Y-2Y Curve</label>
+                        </div>
+                    </aside>
+
+                    <article class="live-chart-wrap advanced-chart-wrap">
+                        <div id="customQuantChart" class="live-chart-frame custom-quant-frame"></div>
+                    </article>
+                </div>
+                <div class="tool-pills">
+                    <span>Trendlines and Rays</span>
+                    <span>Horizontal/Vertical Lines</span>
+                    <span>Support/Resistance Zones</span>
+                    <span>Fibonacci Retracement</span>
+                    <span>Gann and Pitchfork Tools</span>
+                    <span>Long/Short Position Tool</span>
+                    <span>Risk/Reward and Stop Planning</span>
+                    <span>Text and Callout Annotation</span>
+                    <span>Ruler/Measure Tool</span>
+                    <span>Long and Short Position Builder</span>
+                    <span>Stop-Loss Visual Planning</span>
+                    <span>Macro Layering (VIX/Spreads/Yields)</span>
+                    <span>Crosshair Price Hover</span>
+                    <span>Range Zoom and Pan</span>
+                </div>
+            </section>
+
+            {% if rates_credit_snapshot and rates_credit_snapshot.rows %}
+            <section class="panel macro-regime-panel">
+                <h2>Yield Curve and Credit Spread Snapshot</h2>
+                <p class="chart-note">Window: {{ rates_credit_snapshot.start }} to {{ rates_credit_snapshot.end }}</p>
+                <div class="table-wrap">
+                    <table class="watchlist-table">
+                        <thead>
+                            <tr>
+                                <th>Metric</th>
+                                <th>Start</th>
+                                <th>End</th>
+                                <th>Change</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in rates_credit_snapshot.rows %}
+                            <tr>
+                                <td>{{ row.metric }}</td>
+                                <td>{{ row.start }}{{ row.unit }}</td>
+                                <td>{{ row.end }}{{ row.unit }}</td>
+                                <td>{{ row.change }}{{ row.unit }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+            {% endif %}
+
+            {% if not is_crisis_mode and orderflow_snapshot %}
+            <section class="panel orderflow-panel">
+                <h2>Orderflow Lite Snapshot</h2>
+                <div class="timeline-metric-grid">
+                    <article class="timeline-metric-card">
+                        <h3>Flow State</h3>
+                        <p>{{ orderflow_snapshot.flow_state }}</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Pressure Score</h3>
+                        <p>{{ orderflow_snapshot.pressure_score }}</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Buy Pressure</h3>
+                        <p>{{ orderflow_snapshot.buy_pressure }}</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Sell Pressure</h3>
+                        <p>{{ orderflow_snapshot.sell_pressure }}</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Volume Impulse</h3>
+                        <p>{{ orderflow_snapshot.volume_impulse }}</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>VWAP Dislocation</h3>
+                        <p>{{ orderflow_snapshot.vwap_dislocation }}%</p>
+                    </article>
+                </div>
+                <p class="chart-note">{{ orderflow_snapshot.note }}</p>
+            </section>
+            {% endif %}
+
+            {% if is_crisis_mode and crisis_analytics %}
+            <section class="panel crisis-overview-panel">
+                <h2>Crisis Overview Scorecard</h2>
+                <div class="timeline-metric-grid">
+                    <article class="timeline-metric-card">
+                        <h3>Window</h3>
+                        <p>{{ crisis_analytics.overview.window_start }} to {{ crisis_analytics.overview.window_end }}</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Total Return</h3>
+                        <p>{{ crisis_analytics.overview.return_pct }}%</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Annualized Volatility</h3>
+                        <p>{{ crisis_analytics.overview.annualized_vol_pct }}%</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Downside Deviation</h3>
+                        <p>{{ crisis_analytics.overview.downside_dev_pct }}%</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Largest Down Day</h3>
+                        <p>{{ crisis_analytics.overview.largest_down_day_pct }}%</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Risk Level</h3>
+                        <p>{{ crisis_analytics.overview.risk_level }}</p>
+                    </article>
+                </div>
+            </section>
+
+            <section class="panel crisis-drawdown-panel">
+                <h2>Drawdown and Recovery Map</h2>
+                <div class="timeline-metric-grid">
+                    <article class="timeline-metric-card">
+                        <h3>Max Drawdown</h3>
+                        <p>{{ crisis_analytics.drawdown.max_drawdown_pct }}%</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Peak Date</h3>
+                        <p>{{ crisis_analytics.drawdown.peak_date }}</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Trough Date</h3>
+                        <p>{{ crisis_analytics.drawdown.trough_date }}</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Recovery Date</h3>
+                        <p>{{ crisis_analytics.drawdown.recovery_date }}</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Days to Trough</h3>
+                        <p>{{ crisis_analytics.drawdown.days_to_trough }}</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Underwater Days</h3>
+                        <p>{{ crisis_analytics.drawdown.underwater_days }}</p>
+                    </article>
+                </div>
+                <div class="table-wrap">
+                    <table class="watchlist-table">
+                        <thead>
+                            <tr>
+                                <th>Recovery Level</th>
+                                <th>Target Price</th>
+                                <th>Hit Date</th>
+                                <th>Days From Trough</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in crisis_analytics.recovery_ladder %}
+                            <tr>
+                                <td>{{ row.level }}</td>
+                                <td>{{ row.target_price }}</td>
+                                <td>{{ row.hit_date }}</td>
+                                <td>{{ row.days }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="panel crisis-risk-panel">
+                <h2>Tail Risk and Stress Factors</h2>
+                <div class="timeline-metric-grid">
+                    <article class="timeline-metric-card">
+                        <h3>VaR 95%</h3>
+                        <p>{{ crisis_analytics.tail_risk.var_95_pct }}%</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>CVaR 95%</h3>
+                        <p>{{ crisis_analytics.tail_risk.cvar_95_pct }}%</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Skew</h3>
+                        <p>{{ crisis_analytics.tail_risk.skew }}</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Kurtosis</h3>
+                        <p>{{ crisis_analytics.tail_risk.kurtosis }}</p>
+                    </article>
+                </div>
+                <div class="table-wrap">
+                    <table class="watchlist-table">
+                        <thead>
+                            <tr>
+                                <th>Factor</th>
+                                <th>Start</th>
+                                <th>End</th>
+                                <th>Average</th>
+                                <th>Max</th>
+                                <th>Change</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in crisis_analytics.stress_factors %}
+                            <tr>
+                                <td>{{ row.factor }}</td>
+                                <td>{{ row.start }}</td>
+                                <td>{{ row.end }}</td>
+                                <td>{{ row.avg }}</td>
+                                <td>{{ row.max }}</td>
+                                <td>{{ row.change }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="panel crisis-relative-panel">
+                <h2>Relative Performance and Capture Ratios</h2>
+                <div class="timeline-metric-grid">
+                    <article class="timeline-metric-card">
+                        <h3>Benchmark</h3>
+                        <p>{{ crisis_analytics.benchmark.symbol }}</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>{{ ticker }} Return</h3>
+                        <p>{{ crisis_analytics.benchmark.asset_return }}%</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Benchmark Return</h3>
+                        <p>{{ crisis_analytics.benchmark.benchmark_return }}%</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Excess Return</h3>
+                        <p>{{ crisis_analytics.benchmark.excess_return }}%</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Crisis Beta</h3>
+                        <p>{{ crisis_analytics.benchmark.beta }}</p>
+                    </article>
+                    <article class="timeline-metric-card">
+                        <h3>Downside Capture</h3>
+                        <p>{{ crisis_analytics.benchmark.downside_capture }}</p>
+                    </article>
+                </div>
+            </section>
+
+            <section class="panel crisis-rolling-panel">
+                <h2>Rolling Crisis Diagnostics</h2>
+                <div id="crisisRollingChart" class="live-chart-frame custom-quant-frame"></div>
+                <p class="chart-note">20-session rolling volatility, drawdown, tail risk, beta, correlation, and downside deviation.</p>
+            </section>
+
+            <section class="panel crisis-phases-panel">
+                <h2>Phase Segmentation and Event Timeline</h2>
+                <div class="table-wrap">
+                    <table class="watchlist-table">
+                        <thead>
+                            <tr>
+                                <th>Phase</th>
+                                <th>Return %</th>
+                                <th>Volatility %</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in crisis_analytics.phase_returns %}
+                            <tr>
+                                <td>{{ row.phase }}</td>
+                                <td>{{ row.return_pct }}</td>
+                                <td>{{ row.volatility_pct }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="table-wrap">
+                    <table class="watchlist-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Event</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in crisis_analytics.event_timeline %}
+                            <tr>
+                                <td>{{ row.date }}</td>
+                                <td>{{ row.event }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="panel crisis-scenarios-panel">
+                <h2>Scenario Replay and Cross-Asset Heatmap</h2>
+                <div class="table-wrap">
+                    <table class="watchlist-table">
+                        <thead>
+                            <tr>
+                                <th>Scenario</th>
+                                <th>Outcome</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in crisis_analytics.scenario_tests %}
+                            <tr>
+                                <td>{{ row.strategy }}</td>
+                                <td>{{ row.return_pct }}{% if row.strategy != '10% Drawdown Stop Trigger Days' %}%{% endif %}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="table-wrap">
+                    <table class="watchlist-table">
+                        <thead>
+                            <tr>
+                                <th>Asset</th>
+                                <th>Return %</th>
+                                <th>Volatility %</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in crisis_analytics.heatmap %}
+                            <tr>
+                                <td>{{ row.symbol }}</td>
+                                <td>{{ row.return_pct }}</td>
+                                <td>{{ row.volatility_pct }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="table-wrap">
+                    <table class="watchlist-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Direction</th>
+                                <th>Move %</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in crisis_analytics.largest_moves %}
+                            <tr>
+                                <td>{{ row.date }}</td>
+                                <td>{{ row.direction }}</td>
+                                <td>{{ row.move_pct }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+            {% endif %}
+
+            {% if not is_crisis_mode %}
+            <section class="panel watchlist-panel">
+                <h2>Regime-Adjusted Watchlist</h2>
+                <p class="chart-note">Ranked using the selected analysis window, momentum, and participation context.</p>
+                <div class="table-wrap">
+                    <table class="watchlist-table">
+                        <thead>
+                            <tr>
+                                <th>Symbol</th>
+                                <th>Score</th>
+                                <th>Bias</th>
+                                <th>1M Return</th>
+                                <th>3M Return</th>
+                                <th>Volume Ratio</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in watchlist %}
+                            <tr>
+                                <td>{{ row.symbol }}</td>
+                                <td>{{ row.score }}</td>
+                                <td>{{ row.bias }}</td>
+                                <td>{{ row.ret_1m }}%</td>
+                                <td>{{ row.ret_3m }}%</td>
+                                <td>{{ row.vol_ratio }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+            {% endif %}
+
+            <section class="panel data-panel">
+                <h2>Time Series Data</h2>
+                <div class="table-wrap">
+                    {{ stock_data | safe }}
+                </div>
+            </section>
+
+            {% if not is_crisis_mode and ipo_intelligence %}
+            <section class="panel ipo-panel">
+                <h2>IPO Intelligence</h2>
+                <p class="chart-note">Available in regular trading mode; removed in crisis-window mode.</p>
+                <div class="table-wrap">
+                    <table class="watchlist-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Ticker</th>
+                                <th>Exchange</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in ipo_intelligence.upcoming %}
+                            <tr>
+                                <td>{{ row.name }}</td>
+                                <td>{{ row.ticker }}</td>
+                                <td>{{ row.exchange }}</td>
+                                <td>{{ row.date }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+            {% endif %}
+
+            <section class="panel news-panel">
+                <h2>Market News Feed</h2>
+                <p class="chart-note">Window-aligned headlines for {{ ticker }} based on selected global crisis period.</p>
+                <div class="news-ticker-wrap">
+                    <div class="news-ticker-track">
+                        {% for item in market_news %}
+                            <a class="news-item" href="{{ item.url }}" target="_blank" rel="noopener noreferrer">
+                                <span>[{{ item.source }}]</span> {{ item.title }}
+                            </a>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="news-list">
+                    {% for item in market_news %}
+                        <article class="news-card">
+                            <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">{{ item.title }}</a>
+                            <p>{{ item.source }}{% if item.published %} | {{ item.published }}{% endif %}</p>
+                        </article>
+                    {% endfor %}
+                </div>
+            </section>
+
+            <section class="panel data-panel">
+                <h2>Fundamental Overview and Key Metrics</h2>
+                <div class="table-wrap">
+                    {{ companyMetrics | safe }}
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+    <script>
+        const customFullscreenBtn = document.getElementById('customFullscreenBtn');
+        const menuTrigger = document.getElementById('menuTrigger');
+        const menuPanel = document.getElementById('menuPanel');
+        const menuDropdown = document.getElementById('menuDropdown');
+        const customChartWrap = document.getElementById('customChartWrap');
+        const indicatorPicker = document.getElementById('indicatorPicker');
+        const overlayPicker = document.getElementById('overlayPicker');
+        const reloadCustomChartBtn = document.getElementById('reloadCustomChart');
+        const undoDrawingBtn = document.getElementById('undoDrawing');
+        const clearDrawingsBtn = document.getElementById('clearDrawings');
+        const customQuantChart = document.getElementById('customQuantChart');
+        const toolboxButtons = document.getElementById('toolboxButtons');
+        const activeToolLabel = document.getElementById('activeToolLabel');
+        const toolLookup = document.getElementById('toolLookup');
+        const strategyLookup = document.getElementById('strategyLookup');
+        const strategyList = document.getElementById('strategyList');
+        const addPriceAlertBtn = document.getElementById('addPriceAlert');
+        const alertConditionField = document.getElementById('alertCondition');
+        const alertPriceField = document.getElementById('alertPrice');
+        const priceAlertList = document.getElementById('priceAlertList');
+        const priceAlertStatus = document.getElementById('priceAlertStatus');
+        const toolColorInput = document.getElementById('toolColor');
+        const toolWidthInput = document.getElementById('toolWidth');
+        const toolDashInput = document.getElementById('toolDash');
+        const magnetToggle = document.getElementById('magnetToggle');
+        const tickerField = document.getElementById('ticker');
+        const periodField = document.getElementById('period');
+        const assetTypeField = document.getElementById('asset_type');
+        const activeStrategyField = document.getElementById('active_strategy');
+        const strategyHeader = document.querySelector('.stock-meta h1');
+        const scrollProgress = document.getElementById('scrollProgress');
+        const parallaxLayers = document.querySelectorAll('[data-parallax]');
+        const spotlightPanels = document.querySelectorAll('.panel');
+        const crisisRollingChart = document.getElementById('crisisRollingChart');
+        const crisisAnalytics = {{ (crisis_analytics if crisis_analytics else {})|tojson }};
+        const runBacktestBtn = document.getElementById('runBacktestBtn');
+        const playBacktestBtn = document.getElementById('playBacktestBtn');
+        const pauseBacktestBtn = document.getElementById('pauseBacktestBtn');
+        const resetBacktestBtn = document.getElementById('resetBacktestBtn');
+        const backtestChart = document.getElementById('backtestChart');
+        const backtestStats = document.getElementById('backtestStats');
+        const btStrategy = document.getElementById('btStrategy');
+        const btRsiLength = document.getElementById('btRsiLength');
+        const btRsiBuy = document.getElementById('btRsiBuy');
+        const btRsiSell = document.getElementById('btRsiSell');
+        const btStopLoss = document.getElementById('btStopLoss');
+        const btTakeProfit = document.getElementById('btTakeProfit');
+        const btAllowShort = document.getElementById('btAllowShort');
+        const btUseChartTools = document.getElementById('btUseChartTools');
+        const customRuleBuilder = document.getElementById('customRuleBuilder');
+        const btStrategyFamily = document.getElementById('btStrategyFamily');
+        const btStrategyCatalog = document.getElementById('btStrategyCatalog');
+        const strategyParamsBlock = document.getElementById('strategyParamsBlock');
+        const chartTypeMode = document.getElementById('chartTypeMode');
+        const themeModeSelect = document.getElementById('themeModeSelect');
+        const timelinePreset = document.getElementById('timeline_preset');
+        const customDateGrid = document.getElementById('customDateGrid');
+        const strategyCatalog = {{ (strategy_catalog if strategy_catalog else [])|tojson }};
+
+        let currentTool = 'none';
+        let chartDataCache = null;
+        let customShapes = [];
+        let customAnnotations = [];
+        let drawingActions = [];
+        let firstPoint = null;
+        let pendingPositionConfig = null;
+        let backtestState = null;
+        let replayTimer = null;
+        let replayIndex = 0;
+        let selectedStrategySpec = null;
+
+        function updateTimelineInputs() {
+            if (!timelinePreset || !customDateGrid) {
+                return;
+            }
+            const isCustom = timelinePreset.value === 'custom';
+            customDateGrid.classList.toggle('visible', isCustom);
+        }
+
+        function resetDynamicParamsContainer() {
+            if (!strategyParamsBlock) {
+                return;
+            }
+            strategyParamsBlock.innerHTML = '<h3>Strategy Parameters</h3><p class="chart-note">Parameters update based on selected strategy template.</p>';
+        }
+
+        function ensureNumericParam(id, label, value, min, max, step) {
+            if (!strategyParamsBlock) {
+                return null;
+            }
+            let input = document.getElementById(id);
+            if (input) {
+                input.value = value;
+                return input;
+            }
+            const wrapper = document.createElement('div');
+            wrapper.className = 'input-group';
+            wrapper.innerHTML = `<label for=\"${id}\">${label}</label><input id=\"${id}\" class=\"field-input\" type=\"number\" value=\"${value}\" min=\"${min}\" max=\"${max}\" step=\"${step}\">`;
+            strategyParamsBlock.appendChild(wrapper);
+            return document.getElementById(id);
+        }
+
+        function renderStrategyParams(spec) {
+            resetDynamicParamsContainer();
+            if (!spec) {
+                return;
+            }
+            const defaults = spec.defaults || {};
+            if (spec.engine === 'rsi_reversal') {
+                ensureNumericParam('btRsiLengthDynamic', 'RSI Length', defaults.rsi_length || 14, 2, 60, 1);
+                ensureNumericParam('btRsiBuyDynamic', 'RSI Buy <=', defaults.rsi_buy || 30, 5, 50, 1);
+                ensureNumericParam('btRsiSellDynamic', 'RSI Sell >=', defaults.rsi_sell || 70, 50, 95, 1);
+            } else if (spec.engine === 'ema_cross_custom') {
+                ensureNumericParam('btEmaFast', 'EMA Fast', defaults.ema_fast || 20, 2, 150, 1);
+                ensureNumericParam('btEmaSlow', 'EMA Slow', defaults.ema_slow || 50, 3, 300, 1);
+            } else {
+                ensureNumericParam('btThreshold', 'Threshold', defaults.threshold || 0, -300, 300, 0.1);
+            }
+        }
+
+        function buildStrategyFamilyOptions() {
+            if (!btStrategyFamily) return;
+            const families = [...new Set(strategyCatalog.map((s) => s.family || 'Other'))].sort();
+            btStrategyFamily.innerHTML = '<option value="all" selected>All Families</option>' + families.map((f) => `<option value=\"${f}\">${f}</option>`).join('');
+        }
+
+        function refreshStrategyCatalog() {
+            if (!btStrategyCatalog) return;
+            const family = btStrategyFamily ? btStrategyFamily.value : 'all';
+            const list = strategyCatalog.filter((item) => family === 'all' || item.family === family);
+            btStrategyCatalog.innerHTML = list.map((item) => `<option value=\"${item.id}\">${item.name}</option>`).join('');
+            if (list.length) {
+                selectedStrategySpec = list[0];
+                btStrategyCatalog.value = selectedStrategySpec.id;
+                btStrategy.value = selectedStrategySpec.engine === 'ema_cross_custom' ? 'ema_cross' : selectedStrategySpec.engine;
+            }
+            renderStrategyParams(selectedStrategySpec);
+            toggleRuleBuilder();
+        }
+
+        function applyThemeMode(mode) {
+            if (mode === 'light') {
+                document.body.classList.add('theme-light');
+            } else {
+                document.body.classList.remove('theme-light');
+            }
+            try {
+                localStorage.setItem('stx_theme_mode', mode);
+            } catch (error) {
+                void error;
+            }
+        }
+
+        function renderBacktestStats(metrics) {
+            if (!backtestStats || !metrics) {
+                return;
+            }
+            const rows = [
+                ['Total Return', `${metrics.total_return_pct}%`],
+                ['CAGR', `${metrics.cagr_pct}%`],
+                ['Max Drawdown', `${metrics.max_drawdown_pct}%`],
+                ['Win Rate', `${metrics.win_rate_pct}%`],
+                ['Profit Factor', `${metrics.profit_factor}`],
+                ['Trades', `${metrics.trades}`],
+            ];
+            backtestStats.innerHTML = rows.map((row) => `<article class=\"timeline-metric-card\"><h3>${row[0]}</h3><p>${row[1]}</p></article>`).join('');
+        }
+
+        function renderBacktestStatsAtIndex(state, uptoIndex) {
+            if (!state || !state.timeline || !state.timeline.length || !backtestStats) {
+                return;
+            }
+            const idx = Math.max(0, Math.min(uptoIndex, state.timeline.length - 1));
+            const startEquity = state.timeline[0].equity || 10000;
+            const endEquity = state.timeline[idx].equity || startEquity;
+            const totalReturn = ((endEquity / startEquity) - 1) * 100;
+
+            const startDate = new Date(state.timeline[0].date);
+            const endDate = new Date(state.timeline[idx].date);
+            const days = Math.max(1, Math.round((endDate - startDate) / (1000 * 60 * 60 * 24)));
+            const cagr = Math.pow(endEquity / startEquity, 365 / days) - 1;
+
+            const curve = state.timeline.slice(0, idx + 1).map((row) => row.equity);
+            let peak = curve[0] || startEquity;
+            let maxDd = 0;
+            curve.forEach((v) => {
+                peak = Math.max(peak, v);
+                if (peak > 0) {
+                    maxDd = Math.min(maxDd, (v / peak) - 1);
+                }
+            });
+
+            const dateLimit = state.timeline[idx].date;
+            const closedTrades = (state.trades || []).filter((t) => t.exit_date && t.exit_date <= dateLimit);
+            const wins = closedTrades.filter((t) => Number(t.pnl_pct || 0) > 0).length;
+            const winRate = closedTrades.length ? (wins / closedTrades.length) * 100 : 0;
+            const grossWin = closedTrades.filter((t) => Number(t.pnl_pct || 0) > 0).reduce((a, b) => a + Number(b.pnl_pct || 0), 0);
+            const grossLoss = Math.abs(closedTrades.filter((t) => Number(t.pnl_pct || 0) <= 0).reduce((a, b) => a + Number(b.pnl_pct || 0), 0));
+            const pf = grossLoss > 0 ? grossWin / grossLoss : (grossWin > 0 ? Infinity : 0);
+
+            renderBacktestStats({
+                total_return_pct: totalReturn.toFixed(2),
+                cagr_pct: (cagr * 100).toFixed(2),
+                max_drawdown_pct: (Math.abs(maxDd) * 100).toFixed(2),
+                win_rate_pct: winRate.toFixed(2),
+                profit_factor: Number.isFinite(pf) ? pf.toFixed(2) : 'Inf',
+                trades: closedTrades.length,
+            });
+        }
+
+        function buildRuleSet(prefix) {
+            const rules = [];
+            for (let i = 1; i <= 3; i += 1) {
+                const lhs = document.getElementById(`${prefix}Lhs${i}`);
+                const op = document.getElementById(`${prefix}Op${i}`);
+                const rhsType = document.getElementById(`${prefix}RhsType${i}`);
+                const rhsVal = document.getElementById(`${prefix}RhsValue${i}`);
+                const rhsIndicator = document.getElementById(`${prefix}RhsIndicator${i}`);
+                if (!lhs || !op || !rhsType || !rhsVal || !rhsIndicator) {
+                    continue;
+                }
+                if (!lhs.value) {
+                    continue;
+                }
+                const rule = {
+                    lhs: lhs.value,
+                    op: op.value,
+                    rhs_type: rhsType.value,
+                    rhs_value: rhsType.value === 'value' ? Number(rhsVal.value || 0) : null,
+                    rhs_indicator: rhsType.value === 'indicator' ? rhsIndicator.value : null,
+                };
+                rules.push(rule);
+            }
+            return rules;
+        }
+
+        function toggleRuleBuilder() {
+            if (!customRuleBuilder || !btStrategy) {
+                return;
+            }
+            customRuleBuilder.style.display = btStrategy.value === 'custom_builder' ? 'block' : 'none';
+        }
+
+        function populateIndicatorSelects() {
+            const selects = document.querySelectorAll('.bt-indicator-select');
+            const baseIndicators = ['close', 'open', 'high', 'low', 'volume'];
+            const indicatorIds = [...indicatorPicker.querySelectorAll('input[type="checkbox"]')].map((el) => el.value);
+            const all = [...baseIndicators, ...indicatorIds];
+            selects.forEach((sel) => {
+                const current = sel.value;
+                sel.innerHTML = all.map((name) => `<option value=\"${name}\">${name}</option>`).join('');
+                if (all.includes(current)) {
+                    sel.value = current;
+                }
+            });
+
+            if (document.getElementById('entryLhs1')) document.getElementById('entryLhs1').value = 'rsi14';
+            if (document.getElementById('entryOp1')) document.getElementById('entryOp1').value = '<=';
+            if (document.getElementById('entryRhsValue1')) document.getElementById('entryRhsValue1').value = '30';
+            if (document.getElementById('exitLhs1')) document.getElementById('exitLhs1').value = 'rsi14';
+            if (document.getElementById('exitOp1')) document.getElementById('exitOp1').value = '>=';
+            if (document.getElementById('exitRhsValue1')) document.getElementById('exitRhsValue1').value = '70';
+        }
+
+        function applyBeginnerDescriptions() {
+            const fieldDescriptions = {
+                asset_type: 'Choose what market you are analyzing: stock, forex, or bond.',
+                ticker: 'Type the symbol you want to study, like AAPL or UST10Y.',
+                timeline_preset: 'Pick a historical window so analysis uses that exact period.',
+                start_date: 'Use this when custom range is selected to set a start date.',
+                end_date: 'Use this when custom range is selected to set an end date.',
+                btStrategy: 'Choose a strategy template or switch to custom rule builder.',
+                btRsiLength: 'Number of bars used to compute RSI values.',
+                btRsiBuy: 'Entry trigger when RSI is at or below this threshold.',
+                btRsiSell: 'Exit trigger when RSI is at or above this threshold.',
+                btStopLoss: 'Optional stop loss percentage per trade. Set 0 to disable.',
+                btTakeProfit: 'Optional take profit percentage per trade. Set 0 to disable.',
+                btAllowShort: 'Turn on to allow short-selling in simulation.',
+                btUseChartTools: 'If enabled, uses your drawn levels/zones as extra entry/exit filters.',
+                btStrategyFamily: 'Filter strategy templates by family to compare style-specific ideas.',
+                btStrategyCatalog: 'Pick one of 60+ common strategy templates to test quickly.',
+                chartTypeMode: 'Switch price display between candlestick and line view.',
+                themeModeSelect: 'Switch between dark mode and curated light mode.',
+                toolLookup: 'Search tools and indicators by typing keywords.',
+                strategyLookup: 'Search preset strategy ideas by regime or indicator.',
+                toolColor: 'Sets the drawing color for the next tool you apply.',
+                toolWidth: 'Sets drawing thickness for lines and shapes.',
+                toolDash: 'Choose solid, dotted, or dashed drawing style.',
+                alertCondition: 'Select whether alert triggers above or below a level.',
+                alertPrice: 'Enter price level that should trigger an alert.',
+            };
+
+            Object.entries(fieldDescriptions).forEach(([id, text]) => {
+                const el = document.getElementById(id);
+                if (!el || el.dataset.helpAttached === '1') {
+                    return;
+                }
+                const note = document.createElement('p');
+                note.className = 'chart-note help-note';
+                note.textContent = text;
+                el.insertAdjacentElement('afterend', note);
+                el.dataset.helpAttached = '1';
+            });
+
+            const toolDescriptions = {
+                trendline: 'Draws a straight trend line between two points.',
+                ray: 'Starts at one point and extends infinitely forward.',
+                extendedline: 'Extends your line both left and right across chart.',
+                horizontal: 'Adds horizontal support/resistance level.',
+                vertical: 'Marks an exact date bar for event reference.',
+                zone: 'Marks a price area as support/resistance zone.',
+                channel: 'Draws parallel trend channel around movement.',
+                fib: 'Plots common Fibonacci retracement levels.',
+                long: 'Visual long trade planner with stop and target.',
+                short: 'Visual short trade planner with stop and target.',
+                measure: 'Measures move size and percentage change.',
+                anchoredvwap: 'Marks anchored reference for VWAP-style analysis.',
+                none: 'Pointer mode for selecting and moving objects.',
+            };
+
+            [...toolboxButtons.querySelectorAll('.tool-button')].forEach((button) => {
+                if (button.dataset.helpAttached === '1') {
+                    return;
+                }
+                const key = button.getAttribute('data-tool');
+                const text = toolDescriptions[key] || 'Chart drawing tool for manual analysis and planning.';
+                button.title = text;
+                button.dataset.helpAttached = '1';
+            });
+
+            [...indicatorPicker.querySelectorAll('label')].forEach((label) => {
+                if (label.dataset.helpAttached === '1') {
+                    return;
+                }
+                const note = document.createElement('small');
+                note.className = 'help-mini';
+                note.textContent = 'Used in chart overlays and backtest rules.';
+                label.appendChild(note);
+                label.dataset.helpAttached = '1';
+            });
+
+            [...overlayPicker.querySelectorAll('label')].forEach((label) => {
+                if (label.dataset.helpAttached === '1') {
+                    return;
+                }
+                const note = document.createElement('small');
+                note.className = 'help-mini';
+                note.textContent = 'Macro context series for stress interpretation.';
+                label.appendChild(note);
+                label.dataset.helpAttached = '1';
+            });
+
+            document.querySelectorAll('.input-group').forEach((group) => {
+                if (group.querySelector('.help-note')) {
+                    return;
+                }
+                const note = document.createElement('p');
+                note.className = 'chart-note help-note';
+                note.textContent = 'Beginner note: this field changes how analysis and simulation are calculated.';
+                group.appendChild(note);
+            });
+        }
+
+        function renderBacktestChart(state, uptoIndex) {
+            if (!backtestChart || !state || !Array.isArray(state.timeline) || !state.timeline.length) {
+                return;
+            }
+            const slice = state.timeline.slice(0, uptoIndex + 1);
+            const x = slice.map((r) => r.date);
+            const price = slice.map((r) => r.close);
+            const equity = slice.map((r) => r.equity);
+            const marks = slice.filter((r) => r.signal);
+            const chartMode = chartTypeMode ? chartTypeMode.value : 'candlestick';
+
+            const traces = [];
+            if (chartMode === 'line') {
+                traces.push({ x, y: price, mode: 'lines', name: 'Price', line: { color: '#8abfff', width: 1.7 }, yaxis: 'y' });
+            } else {
+                traces.push({
+                    x,
+                    open: slice.map((r) => r.open ?? r.close),
+                    high: slice.map((r) => r.high ?? r.close),
+                    low: slice.map((r) => r.low ?? r.close),
+                    close: slice.map((r) => r.close),
+                    type: 'candlestick',
+                    name: 'Price OHLC',
+                    increasing: { line: { color: '#2de2b8' } },
+                    decreasing: { line: { color: '#ff6b6b' } },
+                    yaxis: 'y'
+                });
+            }
+            traces.push(
+                { x, y: equity, mode: 'lines', name: 'Equity', line: { color: '#64ddb5', width: 1.9 }, yaxis: 'y2' },
+                {
+                    x: marks.map((m) => m.date),
+                    y: marks.map((m) => m.close),
+                    mode: 'markers',
+                    name: 'Signals',
+                    marker: { size: 8, color: marks.map((m) => m.signal === 'BUY' ? '#2de2b8' : '#ff7d7d') },
+                    yaxis: 'y'
+                }
+            );
+
+            Plotly.newPlot(backtestChart, traces, {
+                title: `Backtest Replay - ${state.strategy_name}`,
+                paper_bgcolor: '#0a1220',
+                plot_bgcolor: '#0a1220',
+                font: { color: '#d8e9ff' },
+                margin: { l: 50, r: 45, t: 44, b: 32 },
+                yaxis: { title: 'Price', domain: [0.45, 1] },
+                yaxis2: { title: 'Equity', domain: [0, 0.38] },
+                legend: { orientation: 'h', y: 1.08, x: 0 },
+                hovermode: 'x unified',
+                annotations: [{
+                    text: `Backtest view: ${chartMode === 'line' ? 'Line' : 'Candlestick'}`,
+                    xref: 'paper',
+                    yref: 'paper',
+                    x: 1,
+                    y: 1.13,
+                    showarrow: false,
+                    font: { size: 11, color: '#9ec4eb' }
+                }]
+            }, { responsive: true, displaylogo: false });
+            renderBacktestStatsAtIndex(state, uptoIndex);
+        }
+
+        async function runBacktest() {
+            const payload = {
+                ticker: tickerField ? tickerField.value : '{{ ticker }}',
+                asset_type: assetTypeField ? assetTypeField.value : '{{ asset_type }}',
+                period: periodField ? periodField.value : '{{ period }}',
+                timeline_preset: timelinePreset ? timelinePreset.value : '{{ timeline_preset }}',
+                start_date: document.getElementById('start_date').value || '{{ start_date }}',
+                end_date: document.getElementById('end_date').value || '{{ end_date }}',
+                strategy: btStrategy ? btStrategy.value : 'rsi_reversal',
+                strategy_template_id: btStrategyCatalog ? btStrategyCatalog.value : null,
+                rsi_length: btRsiLength ? Number(btRsiLength.value) : 14,
+                rsi_buy: btRsiBuy ? Number(btRsiBuy.value) : 30,
+                rsi_sell: btRsiSell ? Number(btRsiSell.value) : 70,
+                stop_loss_pct: btStopLoss ? Number(btStopLoss.value) : 0,
+                take_profit_pct: btTakeProfit ? Number(btTakeProfit.value) : 0,
+                allow_short: btAllowShort ? btAllowShort.value === 'true' : false,
+                use_chart_tools: btUseChartTools ? btUseChartTools.value === 'true' : false,
+                entry_rules: buildRuleSet('entry'),
+                exit_rules: buildRuleSet('exit'),
+                chart_tools: customShapes || [],
+                execution_model: 'next_open'
+            };
+            const dynRsiLen = document.getElementById('btRsiLengthDynamic');
+            const dynRsiBuy = document.getElementById('btRsiBuyDynamic');
+            const dynRsiSell = document.getElementById('btRsiSellDynamic');
+            const emaFast = document.getElementById('btEmaFast');
+            const emaSlow = document.getElementById('btEmaSlow');
+            const threshold = document.getElementById('btThreshold');
+            if (dynRsiLen) payload.rsi_length = Number(dynRsiLen.value || payload.rsi_length);
+            if (dynRsiBuy) payload.rsi_buy = Number(dynRsiBuy.value || payload.rsi_buy);
+            if (dynRsiSell) payload.rsi_sell = Number(dynRsiSell.value || payload.rsi_sell);
+            if (emaFast) payload.ema_fast = Number(emaFast.value || 20);
+            if (emaSlow) payload.ema_slow = Number(emaSlow.value || 50);
+            if (threshold) payload.threshold = Number(threshold.value || 0);
+            const response = await fetch('/api/backtest', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || 'Backtest failed');
+            }
+            backtestState = data;
+            replayIndex = Math.max(0, data.timeline.length - 1);
+            renderBacktestChart(data, replayIndex);
+        }
+
+        function startReplay() {
+            if (!backtestState || !backtestState.timeline || !backtestState.timeline.length) {
+                return;
+            }
+            if (replayTimer) {
+                clearInterval(replayTimer);
+            }
+            replayIndex = 0;
+            renderBacktestChart(backtestState, replayIndex);
+            replayTimer = setInterval(() => {
+                replayIndex += 1;
+                if (replayIndex >= backtestState.timeline.length) {
+                    clearInterval(replayTimer);
+                    replayTimer = null;
+                    replayIndex = backtestState.timeline.length - 1;
+                }
+                renderBacktestChart(backtestState, replayIndex);
+            }, 120);
+        }
+
+        function pauseReplay() {
+            if (replayTimer) {
+                clearInterval(replayTimer);
+                replayTimer = null;
+            }
+        }
+
+        function resetReplay() {
+            pauseReplay();
+            if (backtestState && backtestState.timeline && backtestState.timeline.length) {
+                replayIndex = Math.max(0, backtestState.timeline.length - 1);
+                renderBacktestChart(backtestState, replayIndex);
+            }
+        }
+
+        function toggleMenu(forceState) {
+            if (!menuPanel || !menuTrigger) {
+                return;
+            }
+            const shouldOpen = typeof forceState === 'boolean' ? forceState : !menuPanel.classList.contains('open');
+            menuPanel.classList.toggle('open', shouldOpen);
+            menuTrigger.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+        }
+
+        if (menuTrigger) {
+            menuTrigger.addEventListener('click', () => {
+                toggleMenu();
+            });
+            document.addEventListener('click', (event) => {
+                if (menuDropdown && !menuDropdown.contains(event.target)) {
+                    toggleMenu(false);
+                }
+            });
+        }
+        let priceAlerts = [];
+
+        function renderPriceAlerts() {
+            if (!priceAlertList) {
+                return;
+            }
+            priceAlertList.innerHTML = '';
+            priceAlerts.forEach((alertObj) => {
+                const row = document.createElement('div');
+                row.className = `price-alert-item${alertObj.triggered ? ' triggered' : ''}`;
+                row.innerHTML = `<span>${alertObj.condition.toUpperCase()} ${alertObj.price.toFixed(4)}</span><button type="button" data-remove-alert="${alertObj.id}">Remove</button>`;
+                priceAlertList.appendChild(row);
+            });
+        }
+
+        function renderCrisisRollingChart() {
+            if (!crisisRollingChart || !crisisAnalytics || !Array.isArray(crisisAnalytics.rolling) || !crisisAnalytics.rolling.length) {
+                return;
+            }
+            const rows = crisisAnalytics.rolling;
+            const dates = rows.map((row) => row.date);
+            const traces = [
+                { x: dates, y: rows.map((row) => row.roll_vol), mode: 'lines', name: 'Roll Vol %', line: { width: 1.8, color: '#72c6ff' } },
+                { x: dates, y: rows.map((row) => row.roll_dd), mode: 'lines', name: 'Roll Drawdown %', line: { width: 1.8, color: '#ff9a76' } },
+                { x: dates, y: rows.map((row) => row.roll_tail), mode: 'lines', name: '5% Tail %', line: { width: 1.8, color: '#f7bf5e' } },
+                { x: dates, y: rows.map((row) => row.roll_beta), mode: 'lines', name: 'Roll Beta', line: { width: 1.6, color: '#7ddfbd' } },
+                { x: dates, y: rows.map((row) => row.roll_corr), mode: 'lines', name: 'Roll Corr', line: { width: 1.4, color: '#b6a5ff' } }
+            ];
+
+            const layout = {
+                title: `Crisis Rolling Diagnostics - {{ ticker }}`,
+                paper_bgcolor: '#0a1220',
+                plot_bgcolor: '#0a1220',
+                font: { color: '#d8e9ff' },
+                margin: { l: 50, r: 18, t: 44, b: 34 },
+                legend: { orientation: 'h', y: 1.08, x: 0 },
+                hovermode: 'x unified'
+            };
+            Plotly.newPlot(crisisRollingChart, traces, layout, { responsive: true, displaylogo: false });
+        }
+
+        function checkPriceAlerts(latestPrice) {
+            if (priceAlertStatus) {
+                priceAlertStatus.textContent = `Latest price: ${Number(latestPrice).toFixed(4)}`;
+            }
+
+            priceAlerts.forEach((alertObj) => {
+                if (alertObj.triggered) {
+                    return;
+                }
+                const hitAbove = alertObj.condition === 'above' && latestPrice >= alertObj.price;
+                const hitBelow = alertObj.condition === 'below' && latestPrice <= alertObj.price;
+                if (hitAbove || hitBelow) {
+                    alertObj.triggered = true;
+                    const message = `Price alert hit: ${alertObj.condition.toUpperCase()} ${alertObj.price.toFixed(4)} (now ${Number(latestPrice).toFixed(4)})`;
+                    if (window.Notification && Notification.permission === 'granted') {
+                        new Notification(message);
+                    }
+                    alert(message);
+                }
+            });
+
+            renderPriceAlerts();
+        }
+
+
+        function updateScrollEffects() {
+            const scrollTop = window.scrollY;
+            const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+            const progress = docHeight > 0 ? (scrollTop / docHeight) * 100 : 0;
+            if (scrollProgress) {
+                scrollProgress.style.width = `${progress}%`;
+            }
+
+            parallaxLayers.forEach((layer) => {
+                const speed = Number(layer.getAttribute('data-parallax'));
+                const offset = Math.round(scrollTop * speed);
+                layer.style.transform = `translate3d(0, ${offset}px, 0)`;
+            });
+
+            updatePanelVisibility();
+        }
+
+        function updatePanelVisibility() {
+            if (!spotlightPanels.length) {
+                return;
+            }
+
+            const viewportCenter = window.innerHeight * 0.5;
+            let strongestPanel = null;
+            let strongestScore = -1;
+
+            spotlightPanels.forEach((panel) => {
+                const rect = panel.getBoundingClientRect();
+                const panelCenter = rect.top + (rect.height * 0.5);
+                const distance = Math.abs(panelCenter - viewportCenter);
+                const normalized = Math.min(1, distance / (window.innerHeight * 0.7));
+                const visibleTop = Math.max(rect.top, 0);
+                const visibleBottom = Math.min(rect.bottom, window.innerHeight);
+                const visiblePx = Math.max(0, visibleBottom - visibleTop);
+                const ratio = visiblePx / Math.max(1, Math.min(rect.height, window.innerHeight));
+                const visibility = Math.max(0.42, Math.min(1, (ratio * 0.72) + ((1 - normalized) * 0.28)));
+                panel.style.setProperty('--panel-visibility', visibility.toFixed(3));
+
+                if (visibility > strongestScore) {
+                    strongestScore = visibility;
+                    strongestPanel = panel;
+                }
+            });
+
+            spotlightPanels.forEach((panel) => {
+                panel.classList.remove('spotlight-active', 'spotlight-near');
+                const current = Number(panel.style.getPropertyValue('--panel-visibility') || 0);
+                if (panel === strongestPanel) {
+                    panel.classList.add('spotlight-active');
+                    panel.style.setProperty('--panel-visibility', '1');
+                } else if (current >= 0.45) {
+                    panel.classList.add('spotlight-near');
+                }
+            });
+        }
+
+        window.addEventListener('scroll', updateScrollEffects, { passive: true });
+        window.addEventListener('resize', updateScrollEffects);
+        updateScrollEffects();
+
+        const strategyPlaybook = [
+            { id: 'adaptive-trend', title: 'Adaptive Trend Following', regime: 'Trend', indicators: ['ema20', 'ema50', 'adx', 'atr14'], setup: 'Trade only when ADX strengthens and EMA stack aligns.', risk: 'ATR trailing stop + 1% capital risk.' },
+            { id: 'vol-breakout', title: 'Volatility Breakout Confirmation', regime: 'Breakout', indicators: ['donchian', 'keltner', 'atr14', 'vwap'], setup: 'Breakout beyond compression with volume confirmation.', risk: 'Place stop below breakout base.' },
+            { id: 'macro-risk', title: 'Macro Risk-On Filter', regime: 'Macro', indicators: ['vix', 'credit_spread_hy', 'yield_curve_spread'], setup: 'Reduce longs when VIX and spreads rise with curve inversion.', risk: 'Scale exposure by risk score.' },
+            { id: 'mean-revert', title: 'Range Mean Reversion', regime: 'Range', indicators: ['bbands', 'rsi14', 'adx'], setup: 'Fade extremes only when ADX is weak.', risk: 'Hard stop outside outer band.' },
+            { id: 'pullback', title: 'Trend Pullback Continuation', regime: 'Swing', indicators: ['ema20', 'ema50', 'stoch', 'vwap'], setup: 'Enter retracement inside dominant trend.', risk: 'Stop below prior swing low.' },
+            { id: 'credit-div', title: 'Credit Divergence Warning', regime: 'Risk-Off', indicators: ['credit_spread_hy', 'credit_spread_ig', 'roc12'], setup: 'Exit when credit weakens while price momentum stalls.', risk: 'Cut size by half on divergence.' },
+            { id: 'yield-rotation', title: 'Yield Curve Rotation', regime: 'Macro Rotation', indicators: ['yield_2y', 'yield_10y', 'yield_curve_spread'], setup: 'Rotate sectors using curve steepen/flatten regime shifts.', risk: 'Use broad index hedge when uncertain.' },
+            { id: 'momentum-stack', title: 'Momentum Stack', regime: 'Momentum', indicators: ['macd', 'rsi14', 'roc12', 'supertrend'], setup: 'Trade momentum bursts with multi-indicator confluence.', risk: 'Take partial profits at 2R.' },
+            { id: 'ema-ribbon', title: 'EMA Ribbon Expansion', regime: 'Trend Expansion', indicators: ['ema9', 'ema21', 'ema50', 'atr14'], setup: 'Take entries when ribbon fans out after compression.', risk: 'Trail with EMA21 invalidation.' },
+            { id: 'rsi2-pullback', title: 'RSI-2 Pullback', regime: 'Mean Reversion', indicators: ['sma200', 'rsi2'], setup: 'Buy dips in long-term uptrend when RSI2 gets oversold.', risk: 'Stop under structural support.' },
+            { id: 'squeeze-release', title: 'Squeeze Release', regime: 'Volatility Expansion', indicators: ['bbands_width', 'keltner', 'macd'], setup: 'Enter when BB squeeze releases with momentum confirmation.', risk: 'Fail-break exit quickly.' },
+            { id: 'aroon-trend', title: 'Aroon Trend Shift', regime: 'Trend Shift', indicators: ['aroon', 'adx', 'psar'], setup: 'Capture early trend shifts when Aroon lines flip with ADX support.', risk: 'SAR flip acts as emergency stop.' },
+            { id: 'vwap-reclaim', title: 'VWAP Reclaim', regime: 'Intraday Bias', indicators: ['vwap', 'mfi14', 'atr14'], setup: 'Enter after reclaim and hold above VWAP with healthy money flow.', risk: 'Cut if close back below VWAP.' },
+            { id: 'donchian-trend', title: 'Donchian Turtle Variant', regime: 'Breakout Trend', indicators: ['donchian', 'atr14', 'plus_di', 'minus_di'], setup: 'Breakout entry and ATR pyramid logic.', risk: '20-day low/high exit.' },
+            { id: 'force-divergence', title: 'Force Index Divergence', regime: 'Momentum Reversal', indicators: ['forceindex13', 'rsi14', 'macd'], setup: 'Spot divergence before momentum reversal move.', risk: 'Need trendline break confirmation.' },
+            { id: 'ultimate-thrust', title: 'Ultimate Osc Thrust', regime: 'Swing Momentum', indicators: ['ultimateosc', 'williamsr14', 'roc12'], setup: 'Enter when multi-horizon momentum thrust appears.', risk: 'Time stop after failed follow-through.' },
+            { id: 'hv-breakout', title: 'Historic Volatility Regime Switch', regime: 'Volatility Regime', indicators: ['hv20', 'atr14', 'bbands_width'], setup: 'Switch from mean-revert to breakout when vol regime changes.', risk: 'Smaller size in high-HV environments.' },
+            { id: 'adline-confirm', title: 'ADL Confirmation', regime: 'Breadth Confirmation', indicators: ['adl', 'chaikinosc', 'obv'], setup: 'Confirm breakouts only when accumulation aligns.', risk: 'Avoid entries on divergence.' },
+            { id: 'multi-timeframe', title: 'MTF Alignment Matrix', regime: 'Confluence', indicators: ['ema20', 'ema50', 'supertrend', 'adx'], setup: 'Only execute when lower and higher timeframe bias align.', risk: 'Immediate invalidation on alignment break.' },
+            { id: 'defensive-rotation', title: 'Defensive Rotation Shield', regime: 'Risk Control', indicators: ['vix', 'credit_spread_ig', 'yield_curve_spread', 'cmf20'], setup: 'Move to defensive allocation when stress indicators rise.', risk: 'Hard max drawdown rules.' },
+            { id: 'position-scaler', title: 'Dynamic Position Scaler', regime: 'Risk Engine', indicators: ['atr14', 'hv20', 'vix'], setup: 'Scale position size by realized + implied volatility.', risk: 'Cap leverage in stress regimes.' }
+        ];
+
+        function renderStrategies(filterValue) {
+            if (!strategyList) {
+                return;
+            }
+            const q = (filterValue || '').trim().toLowerCase();
+            const matches = strategyPlaybook.filter((item) => {
+                return (
+                    !q ||
+                    item.title.toLowerCase().includes(q) ||
+                    item.regime.toLowerCase().includes(q) ||
+                    item.indicators.join(',').includes(q)
+                );
+            });
+
+            strategyList.innerHTML = '';
+            matches.forEach((item) => {
+                const row = document.createElement('button');
+                row.type = 'button';
+                row.className = 'strategy-item';
+                row.innerHTML = `<strong>${item.title}</strong><span>${item.regime}</span>`;
+                row.addEventListener('click', () => {
+                    item.indicators.forEach((indicator) => {
+                        const checkbox = indicatorPicker.querySelector(`input[value="${indicator}"]`);
+                        if (checkbox) {
+                            checkbox.checked = true;
+                        }
+                    });
+                    if (activeStrategyField) {
+                        activeStrategyField.value = item.id;
+                    }
+                    if (strategyHeader) {
+                        strategyHeader.textContent = `${item.title} - ${tickerField.value || '{{ ticker }}'}`;
+                    }
+                    loadCustomChart().catch((err) => console.error(err));
+                    alert(`${item.title}\n\nSetup: ${item.setup}\nRisk: ${item.risk}`);
+                });
+                strategyList.appendChild(row);
+            });
+        }
+
+        function filterLookup() {
+            const q = (toolLookup.value || '').toLowerCase();
+            [...toolboxButtons.querySelectorAll('.tool-button')].forEach((button) => {
+                const label = button.textContent.toLowerCase();
+                button.style.display = !q || label.includes(q) ? '' : 'none';
+            });
+
+            [...indicatorPicker.querySelectorAll('label')].forEach((label) => {
+                const text = label.textContent.toLowerCase();
+                label.style.display = !q || text.includes(q) ? '' : 'none';
+            });
+
+            [...overlayPicker.querySelectorAll('label')].forEach((label) => {
+                const text = label.textContent.toLowerCase();
+                label.style.display = !q || text.includes(q) ? '' : 'none';
+            });
+        }
+
+        function activeLineStyle() {
+            return {
+                color: toolColorInput ? toolColorInput.value : '#6fc5ff',
+                width: toolWidthInput ? Number(toolWidthInput.value) : 2,
+                dash: toolDashInput ? toolDashInput.value : 'solid'
+            };
+        }
+
+        function snapPointToClosestClose(point) {
+            if (!magnetToggle || !magnetToggle.checked || !chartDataCache || !chartDataCache.dates || chartDataCache.dates.length === 0) {
+                return point;
+            }
+            const idx = chartDataCache.dates.indexOf(point.x);
+            if (idx >= 0 && chartDataCache.close[idx] != null) {
+                return { ...point, y: Number(chartDataCache.close[idx]) };
+            }
+            return point;
+        }
+
+        async function openFullscreenFor(element) {
+            if (!element) {
+                return;
+            }
+            if (document.fullscreenElement) {
+                await document.exitFullscreen();
+                return;
+            }
+            await element.requestFullscreen();
+        }
+
+        customFullscreenBtn.addEventListener('click', () => openFullscreenFor(customChartWrap));
+
+        function checkedValues(container) {
+            return [...container.querySelectorAll('input[type="checkbox"]:checked')].map((el) => el.value);
+        }
+
+        async function loadCustomChart() {
+            const ticker = tickerField.value || '{{ ticker }}';
+            const period = periodField.value || '{{ period }}';
+            const assetType = assetTypeField ? assetTypeField.value : '{{ asset_type }}';
+            const timelinePresetValue = timelinePreset ? timelinePreset.value : '{{ timeline_preset }}';
+            const startDateValue = document.getElementById('start_date').value || '{{ start_date }}';
+            const endDateValue = document.getElementById('end_date').value || '{{ end_date }}';
+            const indicators = checkedValues(indicatorPicker).join(',');
+            const overlays = checkedValues(overlayPicker).join(',');
+
+            const params = new URLSearchParams({
+                ticker,
+                asset_type: assetType,
+                period,
+                timeline_preset: timelinePresetValue,
+                start_date: startDateValue,
+                end_date: endDateValue,
+                indicators,
+                overlays
+            });
+
+            const response = await fetch(`/api/custom_chart?${params.toString()}`);
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Unable to load custom chart');
+            }
+            const data = await response.json();
+            chartDataCache = data;
+            customShapes = [];
+            customAnnotations = [];
+            drawingActions = [];
+            firstPoint = null;
+            pendingPositionConfig = null;
+
+            const traces = [];
+            const mode = chartTypeMode ? chartTypeMode.value : 'candlestick';
+            if (mode === 'line') {
+                traces.push({
+                    x: data.dates,
+                    y: data.close,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: `${data.ticker} Close`,
+                    line: { color: '#8ac5ff', width: 2 },
+                    xaxis: 'x',
+                    yaxis: 'y'
+                });
+            } else {
+                traces.push({
+                    x: data.dates,
+                    open: data.open,
+                    high: data.high,
+                    low: data.low,
+                    close: data.close,
+                    type: 'candlestick',
+                    name: `${data.ticker} OHLC`,
+                    xaxis: 'x',
+                    yaxis: 'y',
+                    increasing: { line: { color: '#2de2b8' } },
+                    decreasing: { line: { color: '#ff6b6b' } }
+                });
+            }
+
+            const overlayLineMap = {
+                sma20: '#72c6ff',
+                sma50: '#5a9fff',
+                sma200: '#b2a3ff',
+                ema20: '#f7bf5e',
+                ema50: '#ff9f7a',
+                vwap: '#8cf2d8',
+                bbands_upper: '#6ca0ff',
+                bbands_mid: '#4d7dd8',
+                bbands_lower: '#6ca0ff',
+                ichimoku_tenkan: '#ffd166',
+                ichimoku_kijun: '#fca311',
+                ichimoku_senkou_a: '#7bd88f',
+                ichimoku_senkou_b: '#ff7b7b',
+                ichimoku_chikou: '#88b4ff'
+            };
+
+            Object.keys(data.indicators).forEach((key) => {
+                const useSecondary = ['rsi14', 'rsi2', 'rsi21', 'macd', 'macd_signal', 'macd_hist', 'ppo', 'ppo_signal', 'ppo_hist', 'trix15', 'atr14', 'stoch_k', 'stoch_d', 'stochrsi_k', 'stochrsi_d', 'obv', 'adx', 'plus_di', 'minus_di', 'roc12', 'mom10', 'williamsr14', 'cci20', 'mfi14', 'cmf20', 'supertrend_dir', 'ultimateosc', 'forceindex13', 'dpo20', 'hv20', 'adl', 'chaikinosc', 'aroon_up', 'aroon_down'].includes(key);
+                const trace = {
+                    x: data.dates,
+                    y: data.indicators[key],
+                    mode: key === 'macd_hist' ? 'lines' : 'lines',
+                    line: { width: key === 'macd_hist' ? 1.2 : 1.6, color: overlayLineMap[key] || '#9db9ff' },
+                    name: key,
+                    xaxis: useSecondary ? 'x2' : 'x',
+                    yaxis: useSecondary ? 'y2' : 'y'
+                };
+                traces.push(trace);
+            });
+
+            Object.keys(data.macro).forEach((macroKey) => {
+                traces.push({
+                    x: data.dates,
+                    y: data.macro[macroKey],
+                    mode: 'lines',
+                    line: { width: 1.4 },
+                    name: macroKey,
+                    xaxis: 'x3',
+                    yaxis: 'y3'
+                });
+            });
+
+            const layout = {
+                title: `Custom Quant Chart - ${data.ticker} (${data.timeline_label})`,
+                paper_bgcolor: '#0a1220',
+                plot_bgcolor: '#0a1220',
+                font: { color: '#d8e9ff' },
+                dragmode: 'pan',
+                hovermode: 'x unified',
+                margin: { l: 52, r: 16, t: 46, b: 36 },
+                xaxis: { domain: [0, 1], anchor: 'y', rangeslider: { visible: false } },
+                yaxis: { domain: [0.38, 1], title: 'Price', fixedrange: false },
+                xaxis2: { domain: [0, 1], anchor: 'y2', matches: 'x', showticklabels: false },
+                yaxis2: { domain: [0.2, 0.36], title: 'Indicators', fixedrange: false },
+                xaxis3: { domain: [0, 1], anchor: 'y3', matches: 'x' },
+                yaxis3: { domain: [0, 0.18], title: 'Macro', fixedrange: false },
+                legend: { orientation: 'h', y: 1.04, x: 0 },
+                modebar: { bgcolor: '#08121f', color: '#cde2ff', activecolor: '#49b1ff' },
+                shapes: customShapes,
+                annotations: customAnnotations
+            };
+
+            const config = {
+                responsive: true,
+                displaylogo: false,
+                editable: true,
+                edits: {
+                    shapePosition: true,
+                    annotationPosition: true,
+                    annotationText: true
+                },
+                modeBarButtonsToAdd: [
+                    'drawline',
+                    'drawopenpath',
+                    'drawrect',
+                    'drawcircle',
+                    'drawclosedpath',
+                    'eraseshape'
+                ],
+                toImageButtonOptions: {
+                    format: 'png',
+                    filename: `${data.ticker}_custom_quant_chart`,
+                    height: 900,
+                    width: 1600,
+                    scale: 1
+                }
+            };
+
+            Plotly.newPlot(customQuantChart, traces, layout, config);
+            if (typeof customQuantChart.removeAllListeners === 'function') {
+                customQuantChart.removeAllListeners('plotly_relayout');
+            }
+            customQuantChart.on('plotly_relayout', () => {
+                syncShapesFromLayout();
+            });
+
+            if (data.close && data.close.length) {
+                checkPriceAlerts(Number(data.close[data.close.length - 1]));
+            }
+        }
+
+        async function pollLatestQuote() {
+            const ticker = tickerField.value || '{{ ticker }}';
+            const assetType = assetTypeField ? assetTypeField.value : '{{ asset_type }}';
+            try {
+                const params = new URLSearchParams({ ticker, asset_type: assetType });
+                const response = await fetch(`/api/latest_quote?${params.toString()}`);
+                if (!response.ok) {
+                    return;
+                }
+                const quote = await response.json();
+                if (typeof quote.price === 'number') {
+                    checkPriceAlerts(quote.price);
+                }
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
+        function normalizeDateValue(value) {
+            if (value instanceof Date) {
+                return value.toISOString().slice(0, 10);
+            }
+            if (typeof value === 'number') {
+                return new Date(value).toISOString().slice(0, 10);
+            }
+            if (typeof value === 'string') {
+                return value.slice(0, 10);
+            }
+            return String(value);
+        }
+
+        function getAxisForY(fullLayout, relativeY) {
+            const yAxisKeys = ['yaxis', 'yaxis2', 'yaxis3'];
+            for (const axisKey of yAxisKeys) {
+                const axis = fullLayout[axisKey];
+                if (!axis || !axis.domain) {
+                    continue;
+                }
+                const domainStart = axis.domain[0];
+                const domainEnd = axis.domain[1];
+                const yTop = (1 - domainEnd) * fullLayout._size.h;
+                const yBottom = (1 - domainStart) * fullLayout._size.h;
+                if (relativeY >= yTop && relativeY <= yBottom) {
+                    return axis;
+                }
+            }
+            return fullLayout.yaxis;
+        }
+
+        function getChartPointFromMouse(event) {
+            const fullLayout = customQuantChart._fullLayout;
+            if (!fullLayout || !fullLayout.xaxis || !fullLayout._size) {
+                return null;
+            }
+
+            const bounds = customQuantChart.getBoundingClientRect();
+            const plotX = event.clientX - bounds.left - fullLayout._size.l;
+            const plotY = event.clientY - bounds.top - fullLayout._size.t;
+
+            if (plotX < 0 || plotX > fullLayout._size.w || plotY < 0 || plotY > fullLayout._size.h) {
+                return null;
+            }
+
+            const xAxis = fullLayout.xaxis;
+            const yAxis = getAxisForY(fullLayout, plotY);
+            const pointXRaw = xAxis.p2d(plotX);
+            const pointYRaw = yAxis.p2d(plotY);
+
+            return {
+                x: normalizeDateValue(pointXRaw),
+                y: Number(pointYRaw),
+                yAxisId: yAxis._id || 'y'
+            };
+        }
+
+        function yValueForDate(dateValue) {
+            if (!chartDataCache) {
+                return 0;
+            }
+            const idx = chartDataCache.dates.indexOf(dateValue);
+            if (idx >= 0 && chartDataCache.close[idx] != null) {
+                return chartDataCache.close[idx];
+            }
+            return chartDataCache.close[chartDataCache.close.length - 1] || 0;
+        }
+
+        function redrawWithShapes() {
+            const update = {
+                shapes: customShapes,
+                annotations: customAnnotations
+            };
+            Plotly.relayout(customQuantChart, update);
+        }
+
+        function syncShapesFromLayout() {
+            const layout = customQuantChart.layout || {};
+            customShapes = Array.isArray(layout.shapes) ? layout.shapes.map((shape) => ({ ...shape })) : [];
+            customAnnotations = Array.isArray(layout.annotations) ? layout.annotations.map((annotation) => ({ ...annotation })) : [];
+        }
+
+        function pushAction(shapeCount, annotationCount) {
+            drawingActions.push({ shapeCount, annotationCount });
+        }
+
+        function addToolShape(pointA, pointB) {
+            const x1 = pointA.x;
+            const y1 = pointA.y;
+            const x2 = pointB ? pointB.x : pointA.x;
+            const y2 = pointB ? pointB.y : pointA.y;
+            const style = activeLineStyle();
+
+            if (currentTool === 'trendline') {
+                customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: x1, y0: y1, x1: x2, y1: y2, line: style });
+                pushAction(1, 0);
+            } else if (currentTool === 'ray') {
+                const extendedDate = chartDataCache.dates[chartDataCache.dates.length - 1];
+                const slope = (y2 - y1) / Math.max(1, (new Date(x2).getTime() - new Date(x1).getTime()));
+                const yExtended = y1 + (new Date(extendedDate).getTime() - new Date(x1).getTime()) * slope;
+                customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: x1, y0: y1, x1: extendedDate, y1: yExtended, line: style });
+                pushAction(1, 0);
+            } else if (currentTool === 'infoline') {
+                const pct = ((y2 - y1) / y1) * 100;
+                customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: x1, y0: y1, x1: x2, y1: y2, line: style });
+                customAnnotations.push({ x: x2, y: y2, xref: 'x', yref: 'y', text: `Info ${(y2 - y1).toFixed(2)} (${pct.toFixed(2)}%)`, showarrow: false, font: { color: '#d9eeff' }, bgcolor: 'rgba(8,17,30,0.92)' });
+                pushAction(1, 1);
+            } else if (currentTool === 'trendangle') {
+                const dt = Math.max(1, new Date(x2).getTime() - new Date(x1).getTime());
+                const angle = Math.atan2((y2 - y1), dt / (24 * 3600 * 1000)) * 180 / Math.PI;
+                customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: x1, y0: y1, x1: x2, y1: y2, line: style });
+                customAnnotations.push({ x: x2, y: y2, xref: 'x', yref: 'y', text: `${angle.toFixed(1)} deg`, showarrow: false, font: { color: '#d9eeff' }, bgcolor: 'rgba(8,17,30,0.92)' });
+                pushAction(1, 1);
+            } else if (currentTool === 'horizontal') {
+                customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: chartDataCache.dates[0], x1: chartDataCache.dates[chartDataCache.dates.length - 1], y0: y1, y1: y1, line: style });
+                pushAction(1, 0);
+            } else if (currentTool === 'horizontalray') {
+                customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: x1, x1: chartDataCache.dates[chartDataCache.dates.length - 1], y0: y1, y1: y1, line: style });
+                pushAction(1, 0);
+            } else if (currentTool === 'vertical') {
+                customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: x1, x1: x1, y0: Math.min(...chartDataCache.low.filter((v) => v != null)), y1: Math.max(...chartDataCache.high.filter((v) => v != null)), line: style });
+                pushAction(1, 0);
+            } else if (currentTool === 'crossline') {
+                customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: x1, x1: x1, y0: Math.min(...chartDataCache.low.filter((v) => v != null)), y1: Math.max(...chartDataCache.high.filter((v) => v != null)), line: style });
+                customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: chartDataCache.dates[0], x1: chartDataCache.dates[chartDataCache.dates.length - 1], y0: y1, y1: y1, line: style });
+                pushAction(2, 0);
+            } else if (currentTool === 'zone') {
+                customShapes.push({ type: 'rect', xref: 'x', yref: 'y', x0: x1, y0: y1, x1: x2, y1: y2, line: { color: style.color, width: style.width }, fillcolor: 'rgba(45,226,184,0.14)' });
+                pushAction(1, 0);
+            } else if (currentTool === 'channel') {
+                const offset = Math.abs(y2 - y1) * 0.35;
+                customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: x1, y0: y1, x1: x2, y1: y2, line: style });
+                customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: x1, y0: y1 + offset, x1: x2, y1: y2 + offset, line: style });
+                customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: x1, y0: y1 - offset, x1: x2, y1: y2 - offset, line: style });
+                pushAction(3, 0);
+            } else if (currentTool === 'regressionchannel') {
+                const offset = Math.abs(y2 - y1) * 0.5;
+                customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: x1, y0: y1, x1: x2, y1: y2, line: style });
+                customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: x1, y0: y1 + offset, x1: x2, y1: y2 + offset, line: { ...style, dash: 'dot' } });
+                customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: x1, y0: y1 - offset, x1: x2, y1: y2 - offset, line: { ...style, dash: 'dot' } });
+                pushAction(3, 0);
+            } else if (currentTool === 'fib') {
+                const top = Math.max(y1, y2);
+                const bottom = Math.min(y1, y2);
+                const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
+                levels.forEach((lvl) => {
+                    const y = top - ((top - bottom) * lvl);
+                    customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: x1, x1: x2, y0: y, y1: y, line: { color: style.color, width: Math.max(1, style.width - 1), dash: 'dot' } });
+                    customAnnotations.push({ x: x2, y, xref: 'x', yref: 'y', text: `${(lvl * 100).toFixed(1)}%`, showarrow: false, font: { size: 10, color: '#dbc9ff' }, bgcolor: 'rgba(17,26,43,0.9)' });
+                });
+                pushAction(7, 7);
+            } else if (currentTool === 'fibext') {
+                const levels = [1.272, 1.618, 2.0, 2.618];
+                levels.forEach((lvl) => {
+                    const y = y2 + ((y2 - y1) * (lvl - 1));
+                    customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: x1, x1: chartDataCache.dates[chartDataCache.dates.length - 1], y0: y, y1: y, line: { color: style.color, width: 1, dash: 'dot' } });
+                    customAnnotations.push({ x: chartDataCache.dates[chartDataCache.dates.length - 1], y, xref: 'x', yref: 'y', text: `Ext ${lvl}`, showarrow: false, font: { size: 10, color: '#dbc9ff' }, bgcolor: 'rgba(17,26,43,0.9)' });
+                });
+                pushAction(4, 4);
+            } else if (currentTool === 'fibchannel') {
+                const base = y2 - y1;
+                [0, 0.382, 0.618, 1, 1.618].forEach((lvl) => {
+                    customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: x1, y0: y1 + base * lvl, x1: x2, y1: y2 + base * lvl, line: { color: style.color, width: 1, dash: 'dot' } });
+                });
+                pushAction(5, 0);
+            } else if (currentTool === 'gann') {
+                customShapes.push({ type: 'rect', xref: 'x', yref: 'y', x0: x1, y0: y1, x1: x2, y1: y2, line: { color: style.color, width: style.width }, fillcolor: 'rgba(255,205,107,0.08)' });
+                customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: x1, y0: y1, x1: x2, y1: y2, line: style });
+                customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: x1, y0: y2, x1: x2, y1: y1, line: style });
+                pushAction(3, 0);
+            } else if (currentTool === 'pitchfork') {
+                const midX = chartDataCache.dates[Math.floor(chartDataCache.dates.length / 2)];
+                const midY = (y1 + y2) / 2;
+                const spread = Math.abs(y2 - y1) * 0.5;
+                customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: x1, y0: y1, x1: x2, y1: y2, line: style });
+                customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: x1, y0: y1, x1: midX, y1: midY + spread, line: style });
+                customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: x1, y0: y1, x1: midX, y1: midY - spread, line: style });
+                pushAction(3, 0);
+            } else if (currentTool === 'gannfan') {
+                const slopes = [0.25, 0.5, 1, 2, 4];
+                slopes.forEach((s) => {
+                    customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: x1, y0: y1, x1: x2, y1: y1 + ((y2 - y1) * s), line: { color: style.color, width: 1, dash: 'dot' } });
+                });
+                pushAction(5, 0);
+            } else if (currentTool === 'measure') {
+                const pct = ((y2 - y1) / y1) * 100;
+                customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: x1, y0: y1, x1: x2, y1: y2, line: style });
+                customAnnotations.push({ x: x2, y: y2, xref: 'x', yref: 'y', text: `${(y2 - y1).toFixed(2)} (${pct.toFixed(2)}%)`, showarrow: true, ax: 20, ay: -20, font: { color: '#d7f0ff' }, bgcolor: 'rgba(8,16,28,0.92)' });
+                pushAction(1, 1);
+            } else if (currentTool === 'extendedline') {
+                const firstDate = chartDataCache.dates[0];
+                const lastDate = chartDataCache.dates[chartDataCache.dates.length - 1];
+                const dt = Math.max(1, new Date(x2).getTime() - new Date(x1).getTime());
+                const slope = (y2 - y1) / dt;
+                const yStart = y1 + (new Date(firstDate).getTime() - new Date(x1).getTime()) * slope;
+                const yEnd = y1 + (new Date(lastDate).getTime() - new Date(x1).getTime()) * slope;
+                customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: firstDate, y0: yStart, x1: lastDate, y1: yEnd, line: style });
+                pushAction(1, 0);
+            } else if (currentTool === 'arrow') {
+                customAnnotations.push({ x: x2, y: y2, xref: 'x', yref: 'y', text: '', showarrow: true, axref: 'x', ayref: 'y', ax: x1, ay: y1, arrowwidth: style.width, arrowcolor: style.color, arrowsize: 1.2 });
+                pushAction(0, 1);
+            } else if (currentTool === 'callout') {
+                customAnnotations.push({ x: x2, y: y2, xref: 'x', yref: 'y', text: 'Callout', showarrow: true, axref: 'x', ayref: 'y', ax: x1, ay: y1, arrowwidth: style.width, arrowcolor: style.color, bgcolor: 'rgba(20,32,52,0.95)', bordercolor: style.color, font: { color: '#e6f2ff' } });
+                pushAction(0, 1);
+            } else if (currentTool === 'note') {
+                customAnnotations.push({ x: x1, y: y1, xref: 'x', yref: 'y', text: 'Note', showarrow: false, bgcolor: 'rgba(30,44,68,0.95)', bordercolor: style.color, font: { color: '#e6f2ff' } });
+                pushAction(0, 1);
+            } else if (currentTool === 'rect') {
+                customShapes.push({ type: 'rect', xref: 'x', yref: 'y', x0: x1, y0: y1, x1: x2, y1: y2, line: { color: style.color, width: style.width, dash: style.dash }, fillcolor: 'rgba(95,168,255,0.08)' });
+                pushAction(1, 0);
+            } else if (currentTool === 'rotatedrect') {
+                customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: x1, y0: y1, x1: x2, y1: y2, line: style });
+                customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: x1, y0: y1 + Math.abs(y2 - y1) * 0.3, x1: x2, y1: y2 + Math.abs(y2 - y1) * 0.3, line: style });
+                customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: x1, y0: y1, x1: x1, y1: y1 + Math.abs(y2 - y1) * 0.3, line: style });
+                customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: x2, y0: y2, x1: x2, y1: y2 + Math.abs(y2 - y1) * 0.3, line: style });
+                pushAction(4, 0);
+            } else if (currentTool === 'ellipse') {
+                customShapes.push({ type: 'circle', xref: 'x', yref: 'y', x0: x1, y0: y1, x1: x2, y1: y2, line: { color: style.color, width: style.width, dash: style.dash }, fillcolor: 'rgba(95,168,255,0.08)' });
+                pushAction(1, 0);
+            } else if (currentTool === 'triangle') {
+                customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: x1, y0: y1, x1: x2, y1: y2, line: style });
+                customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: x1, y0: y1, x1: x2, y1: y1, line: style });
+                customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: x2, y0: y2, x1: x2, y1: y1, line: style });
+                pushAction(3, 0);
+            } else if (currentTool === 'riskbox') {
+                customShapes.push({ type: 'rect', xref: 'x', yref: 'y', x0: x1, y0: y1, x1: x2, y1: y2, line: { color: '#f4cb6b', width: 1.5 }, fillcolor: 'rgba(244,203,107,0.15)' });
+                customAnnotations.push({ x: x2, y: y2, xref: 'x', yref: 'y', text: 'Risk Box', showarrow: false, font: { color: '#ffe7a8' }, bgcolor: 'rgba(53,42,10,0.92)' });
+                pushAction(1, 1);
+            } else if (currentTool === 'stoploss') {
+                customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: chartDataCache.dates[0], x1: chartDataCache.dates[chartDataCache.dates.length - 1], y0: y1, y1: y1, line: { color: style.color, width: style.width, dash: style.dash } });
+                customAnnotations.push({ x: x1, y: y1, xref: 'x', yref: 'y', text: `Stop ${y1.toFixed(2)}`, showarrow: true, ax: 28, ay: -20, font: { color: '#ffd8d8' }, bgcolor: 'rgba(60,12,16,0.88)' });
+                pushAction(1, 1);
+            } else if (currentTool === 'takeprofit') {
+                customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: chartDataCache.dates[0], x1: chartDataCache.dates[chartDataCache.dates.length - 1], y0: y1, y1: y1, line: { color: '#2de2b8', width: style.width, dash: style.dash } });
+                customAnnotations.push({ x: x1, y: y1, xref: 'x', yref: 'y', text: `Take Profit ${y1.toFixed(2)}`, showarrow: true, ax: 28, ay: -20, font: { color: '#cbffe8' }, bgcolor: 'rgba(12,44,34,0.9)' });
+                pushAction(1, 1);
+            } else if (currentTool === 'anchoredvwap') {
+                customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: x1, x1: chartDataCache.dates[chartDataCache.dates.length - 1], y0: y1, y1: y1, line: { color: '#8cf2d8', width: 2, dash: 'dot' } });
+                customAnnotations.push({ x: x1, y: y1, xref: 'x', yref: 'y', text: 'Anchored VWAP Ref', showarrow: false, font: { color: '#bff8e8' }, bgcolor: 'rgba(10,34,30,0.9)' });
+                pushAction(1, 1);
+            }
+        }
+
+        function addPositionShape(direction, entryPoint, targetPoint) {
+            const entry = entryPoint.y;
+            const target = targetPoint.y;
+            const riskPercent = direction === 'long' ? 0.015 : 0.015;
+            const stop = direction === 'long' ? entry * (1 - riskPercent) : entry * (1 + riskPercent);
+            const rr = direction === 'long' ? (target - entry) / (entry - stop) : (entry - target) / (stop - entry);
+            const zoneTop = direction === 'long' ? Math.max(entry, target) : Math.max(stop, entry);
+            const zoneBottom = direction === 'long' ? Math.min(stop, entry) : Math.min(target, entry);
+            const x0 = entryPoint.x;
+            const x1 = targetPoint.x;
+
+            customShapes.push({ type: 'rect', xref: 'x', yref: 'y', x0, x1, y0: zoneBottom, y1: zoneTop, line: { color: direction === 'long' ? '#2de2b8' : '#ff7b7b', width: 1.4 }, fillcolor: direction === 'long' ? 'rgba(45,226,184,0.14)' : 'rgba(255,107,107,0.14)' });
+            customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0, x1, y0: entry, y1: entry, line: { color: '#f6f2a5', width: 1.3, dash: 'dot' } });
+            customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0, x1, y0: stop, y1: stop, line: { color: '#ff6b6b', width: 1.6 } });
+            customShapes.push({ type: 'line', xref: 'x', yref: 'y', x0, x1, y0: target, y1: target, line: { color: '#2de2b8', width: 1.6 } });
+            customAnnotations.push({ x: x1, y: entry, xref: 'x', yref: 'y', text: `${direction.toUpperCase()} Entry ${entry.toFixed(2)}`, showarrow: false, font: { color: '#f6f2a5' }, bgcolor: 'rgba(28,34,20,0.88)' });
+            customAnnotations.push({ x: x1, y: stop, xref: 'x', yref: 'y', text: `Stop ${stop.toFixed(2)}`, showarrow: false, font: { color: '#ffc9c9' }, bgcolor: 'rgba(58,16,16,0.9)' });
+            customAnnotations.push({ x: x1, y: target, xref: 'x', yref: 'y', text: `Target ${target.toFixed(2)} | R:R ${rr.toFixed(2)}`, showarrow: false, font: { color: '#cbffe8' }, bgcolor: 'rgba(12,44,34,0.9)' });
+            pushAction(4, 3);
+        }
+
+        function onChartClickFromPoint(point) {
+            if (!point || currentTool === 'none') {
+                return;
+            }
+
+            point = snapPointToClosestClose(point);
+
+            if (currentTool === 'annotation') {
+                const textValue = prompt('Enter annotation text');
+                if (textValue) {
+                    customAnnotations.push({ x: point.x, y: point.y, xref: 'x', yref: 'y', text: textValue, showarrow: true, ax: 18, ay: -28, font: { color: '#eff7ff' }, bgcolor: 'rgba(10,17,28,0.92)' });
+                    pushAction(0, 1);
+                    redrawWithShapes();
+                }
+                return;
+            }
+
+            if (currentTool === 'horizontal' || currentTool === 'horizontalray' || currentTool === 'vertical' || currentTool === 'crossline' || currentTool === 'stoploss' || currentTool === 'takeprofit' || currentTool === 'anchoredvwap') {
+                addToolShape(point, null);
+                redrawWithShapes();
+                return;
+            }
+
+            if (currentTool === 'long' || currentTool === 'short') {
+                if (!pendingPositionConfig) {
+                    pendingPositionConfig = point;
+                    customAnnotations.push({ x: point.x, y: point.y, xref: 'x', yref: 'y', text: 'Select target point', showarrow: true, ax: 20, ay: -25, font: { color: '#ffdca8' }, bgcolor: 'rgba(45,32,10,0.9)' });
+                    redrawWithShapes();
+                    activeToolLabel.textContent = `Active tool: ${currentTool === 'long' ? 'Long Position' : 'Short Position'} (select target point)`;
+                    return;
+                }
+
+                addPositionShape(currentTool, pendingPositionConfig, point);
+                pendingPositionConfig = null;
+                customAnnotations = customAnnotations.filter((ann) => ann.text !== 'Select target point');
+                redrawWithShapes();
+                activeToolLabel.textContent = `Active tool: ${currentTool === 'long' ? 'Long Position' : 'Short Position'}`;
+                return;
+            }
+
+            if (!firstPoint) {
+                firstPoint = point;
+                activeToolLabel.textContent = `Active tool: ${currentTool} (select second point)`;
+                return;
+            }
+
+            addToolShape(firstPoint, point);
+            firstPoint = null;
+            redrawWithShapes();
+            activeToolLabel.textContent = `Active tool: ${currentTool}`;
+        }
+
+        function handleChartContainerClick(event) {
+            const clickedPoint = getChartPointFromMouse(event);
+            if (!clickedPoint) {
+                return;
+            }
+            onChartClickFromPoint(clickedPoint);
+        }
+
+        if (!customQuantChart.dataset.clickBound) {
+            customQuantChart.addEventListener('click', handleChartContainerClick);
+            customQuantChart.dataset.clickBound = '1';
+        }
+
+        toolboxButtons.addEventListener('click', (event) => {
+            const button = event.target.closest('[data-tool]');
+            if (!button) {
+                return;
+            }
+
+            currentTool = button.getAttribute('data-tool');
+            firstPoint = null;
+            pendingPositionConfig = null;
+            [...toolboxButtons.querySelectorAll('.tool-button')].forEach((el) => el.classList.remove('active'));
+            button.classList.add('active');
+            const label = button.textContent.trim();
+            activeToolLabel.textContent = `Active tool: ${label}`;
+        });
+
+        toolLookup.addEventListener('input', filterLookup);
+        if (strategyLookup) {
+            strategyLookup.addEventListener('input', () => {
+                renderStrategies(strategyLookup.value);
+            });
+        }
+
+        [toolColorInput, toolWidthInput, toolDashInput, magnetToggle].forEach((control) => {
+            if (!control) {
+                return;
+            }
+            control.addEventListener('change', () => {
+                if (currentTool === 'none') {
+                    activeToolLabel.textContent = 'Active tool: Pointer';
+                } else {
+                    const style = activeLineStyle();
+                    activeToolLabel.textContent = `Active tool: ${currentTool} | ${style.color} | w${style.width} | ${style.dash}`;
+                }
+            });
+        });
+
+        undoDrawingBtn.addEventListener('click', () => {
+            const action = drawingActions.pop();
+            if (!action) {
+                return;
+            }
+            if (action.annotationCount > 0) {
+                customAnnotations.splice(Math.max(0, customAnnotations.length - action.annotationCount), action.annotationCount);
+            }
+            if (action.shapeCount > 0) {
+                customShapes.splice(Math.max(0, customShapes.length - action.shapeCount), action.shapeCount);
+            }
+            redrawWithShapes();
+        });
+
+        clearDrawingsBtn.addEventListener('click', () => {
+            customShapes = [];
+            customAnnotations = [];
+            drawingActions = [];
+            firstPoint = null;
+            pendingPositionConfig = null;
+            redrawWithShapes();
+        });
+
+        if (addPriceAlertBtn && alertPriceField && alertConditionField) {
+            addPriceAlertBtn.addEventListener('click', () => {
+                const price = Number(alertPriceField.value);
+                if (!Number.isFinite(price) || price <= 0) {
+                    alert('Enter a valid positive price level.');
+                    return;
+                }
+
+                const alertObj = {
+                    id: `${Date.now()}-${Math.random()}`,
+                    condition: alertConditionField.value,
+                    price,
+                    triggered: false
+                };
+                priceAlerts.push(alertObj);
+                renderPriceAlerts();
+
+                if (window.Notification && Notification.permission === 'default') {
+                    Notification.requestPermission();
+                }
+            });
+        }
+
+        if (priceAlertList) {
+            priceAlertList.addEventListener('click', (event) => {
+                const btn = event.target.closest('[data-remove-alert]');
+                if (!btn) {
+                    return;
+                }
+                const id = btn.getAttribute('data-remove-alert');
+                priceAlerts = priceAlerts.filter((item) => item.id !== id);
+                renderPriceAlerts();
+            });
+        }
+
+        reloadCustomChartBtn.addEventListener('click', () => {
+            loadCustomChart().catch((err) => {
+                console.error(err);
+                alert(err.message);
+            });
+        });
+
+        indicatorPicker.addEventListener('change', () => {
+            populateIndicatorSelects();
+            loadCustomChart().catch((err) => {
+                console.error(err);
+            });
+        });
+
+        overlayPicker.addEventListener('change', () => {
+            loadCustomChart().catch((err) => {
+                console.error(err);
+            });
+        });
+
+        tickerField.addEventListener('input', () => {
+            if (!strategyHeader) {
+                return;
+            }
+            const strategyName = activeStrategyField && activeStrategyField.value
+                ? activeStrategyField.value.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+                : '{{ active_strategy_name }}';
+            strategyHeader.textContent = `${strategyName} - ${tickerField.value || '{{ ticker }}'}`;
+        });
+
+        if (timelinePreset) {
+            timelinePreset.addEventListener('change', () => {
+                updateTimelineInputs();
+                loadCustomChart().catch((err) => console.error(err));
+            });
+        }
+        updateTimelineInputs();
+
+        if (runBacktestBtn) {
+            runBacktestBtn.addEventListener('click', () => {
+                runBacktest().catch((err) => alert(err.message));
+            });
+        }
+        if (playBacktestBtn) {
+            playBacktestBtn.addEventListener('click', startReplay);
+        }
+        if (pauseBacktestBtn) {
+            pauseBacktestBtn.addEventListener('click', pauseReplay);
+        }
+        if (resetBacktestBtn) {
+            resetBacktestBtn.addEventListener('click', resetReplay);
+        }
+
+        if (btStrategy) {
+            btStrategy.addEventListener('change', toggleRuleBuilder);
+        }
+
+        if (btStrategyFamily) {
+            btStrategyFamily.addEventListener('change', refreshStrategyCatalog);
+        }
+
+        if (btStrategyCatalog) {
+            btStrategyCatalog.addEventListener('change', () => {
+                const map = new Map(strategyCatalog.map((item) => [item.id, item]));
+                selectedStrategySpec = map.get(btStrategyCatalog.value) || null;
+                if (selectedStrategySpec) {
+                    btStrategy.value = selectedStrategySpec.engine === 'ema_cross_custom' ? 'ema_cross' : selectedStrategySpec.engine;
+                }
+                renderStrategyParams(selectedStrategySpec);
+                toggleRuleBuilder();
+            });
+        }
+
+        if (chartTypeMode) {
+            chartTypeMode.addEventListener('change', () => {
+                loadCustomChart().catch((err) => console.error(err));
+                if (backtestState && backtestState.timeline && backtestState.timeline.length) {
+                    renderBacktestChart(backtestState, replayIndex);
+                }
+            });
+        }
+
+        if (themeModeSelect) {
+            let savedMode = 'dark';
+            try {
+                savedMode = localStorage.getItem('stx_theme_mode') || 'dark';
+            } catch (error) {
+                savedMode = 'dark';
+            }
+            themeModeSelect.value = savedMode;
+            applyThemeMode(savedMode);
+            themeModeSelect.addEventListener('change', () => applyThemeMode(themeModeSelect.value));
+        }
+
+        buildStrategyFamilyOptions();
+        refreshStrategyCatalog();
+
+        populateIndicatorSelects();
+        toggleRuleBuilder();
+        applyBeginnerDescriptions();
+
+        renderCrisisRollingChart();
+        loadCustomChart().catch((err) => {
+            console.error(err);
+        });
+        runBacktest().catch((err) => {
+            console.error(err);
+        });
+        if (strategyList) {
+            renderStrategies('');
+        }
+        if (priceAlertStatus || priceAlertList) {
+            setInterval(pollLatestQuote, 30000);
+        }
+    </script>
+</body>
+</html>
